@@ -2,7 +2,6 @@
 
 import React, { useState, useMemo, useRef } from "react"
 import { useFinance } from "@/lib/finance-context"
-import { motion, AnimatePresence } from "framer-motion"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -40,6 +39,7 @@ import type { PaymentMethod, ExpenseType, Person } from "@/lib/types"
 import { format, parseISO } from "date-fns"
 import Papa from "papaparse"
 import { cn } from "@/lib/utils"
+import { PageSkeleton } from "@/components/skeleton-loader"
 
 function formatCurrency(value: number) {
   return value.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })
@@ -62,6 +62,7 @@ export default function DespesasPage() {
     importCSV,
     viewMode,
     personNames,
+    isLoaded,
   } = useFinance()
 
   const [dialogOpen, setDialogOpen] = useState(false)
@@ -161,12 +162,10 @@ export default function DespesasPage() {
       .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
   }, [expenses, searchTerm, filterCategory, filterPayment, filterPerson])
 
+  if (!isLoaded) return <PageSkeleton />
+
   return (
-    <motion.div
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      className="flex flex-col gap-6"
-    >
+    <div className="flex flex-col gap-6">
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
@@ -404,18 +403,12 @@ export default function DespesasPage() {
             </div>
           ) : (
             <div className="flex flex-col gap-1">
-              <AnimatePresence mode="popLayout">
                 {filteredExpenses.map((expense) => {
                   const cat = categories.find((c) => c.id === expense.category)
                   const PayIcon = paymentIcons[expense.paymentMethod] || HelpCircle
-                  return (
-                    <motion.div
+                    return (
+                    <div
                       key={expense.id}
-                      layout
-                      initial={{ opacity: 0, scale: 0.95 }}
-                      animate={{ opacity: 1, scale: 1 }}
-                      exit={{ opacity: 0, scale: 0.95, x: -20 }}
-                      transition={{ type: "spring", stiffness: 300, damping: 25 }}
                       className="flex items-center gap-3 py-3 px-3 rounded-lg hover:bg-muted/50 transition-colors group"
                     >
                       <div
@@ -455,15 +448,14 @@ export default function DespesasPage() {
                         >
                           <Trash2 className="w-4 h-4" />
                         </Button>
-                      </div>
-                    </motion.div>
+                        </div>
+                    </div>
                   )
                 })}
-              </AnimatePresence>
             </div>
           )}
         </CardContent>
       </Card>
-    </motion.div>
+    </div>
   )
 }
