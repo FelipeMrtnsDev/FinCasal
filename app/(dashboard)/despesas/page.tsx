@@ -2,7 +2,6 @@
 
 import React, { useState, useMemo, useRef } from "react"
 import { useFinance } from "@/lib/finance-context"
-import { motion, AnimatePresence } from "framer-motion"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -40,6 +39,7 @@ import type { PaymentMethod, ExpenseType, Person } from "@/lib/types"
 import { format, parseISO } from "date-fns"
 import Papa from "papaparse"
 import { cn } from "@/lib/utils"
+import { PageSkeleton } from "@/components/skeleton-loader"
 
 function formatCurrency(value: number) {
   return value.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })
@@ -62,6 +62,7 @@ export default function DespesasPage() {
     importCSV,
     viewMode,
     personNames,
+    isLoaded,
   } = useFinance()
 
   const [dialogOpen, setDialogOpen] = useState(false)
@@ -161,12 +162,10 @@ export default function DespesasPage() {
       .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
   }, [expenses, searchTerm, filterCategory, filterPayment, filterPerson])
 
+  if (!isLoaded) return <PageSkeleton />
+
   return (
-    <motion.div
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      className="flex flex-col gap-6"
-    >
+    <div className="flex flex-col gap-6">
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
@@ -176,42 +175,12 @@ export default function DespesasPage() {
           </p>
         </div>
         <div className="flex items-center gap-2">
-          {/* CSV Import */}
-          <Dialog open={csvDialogOpen} onOpenChange={setCsvDialogOpen}>
-            <DialogTrigger asChild>
-              <Button variant="outline" size="sm" className="gap-2">
-                <Upload className="w-4 h-4" />
-                <span className="hidden sm:inline">Importar CSV</span>
-              </Button>
-            </DialogTrigger>
-            <DialogContent>
-              <DialogHeader>
-                <DialogTitle>Importar Extrato CSV</DialogTitle>
-                <DialogDescription>
-                  Selecione um arquivo CSV do seu extrato bancario. O arquivo deve conter colunas como descricao/description e valor/amount.
-                </DialogDescription>
-              </DialogHeader>
-              <div className="flex flex-col gap-4 py-4">
-                <p className="text-sm text-muted-foreground">
-                  Colunas aceitas: descricao, valor, data (ou em ingles: description, amount, date)
-                </p>
-                <Input
-                  ref={fileInputRef}
-                  type="file"
-                  accept=".csv"
-                  onChange={handleCSVImport}
-                  className="cursor-pointer"
-                />
-              </div>
-            </DialogContent>
-          </Dialog>
-
           {/* Add Expense */}
           <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
             <DialogTrigger asChild>
               <Button size="sm" className="gap-2 bg-primary text-primary-foreground hover:bg-primary/90">
                 <Plus className="w-4 h-4" />
-                <span className="hidden sm:inline">Nova Despesa</span>
+                Adicionar
               </Button>
             </DialogTrigger>
             <DialogContent className="max-w-md">
@@ -334,6 +303,55 @@ export default function DespesasPage() {
         </div>
       </div>
 
+      {/* CSV Import - Prominent Section */}
+      <Card className="border-dashed border-2 border-primary/30 bg-primary/5">
+        <CardContent className="p-4 sm:p-6">
+          <Dialog open={csvDialogOpen} onOpenChange={setCsvDialogOpen}>
+            <div className="flex flex-col sm:flex-row items-center gap-4">
+              <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center shrink-0">
+                <Upload className="w-6 h-6 text-primary" />
+              </div>
+              <div className="flex flex-col flex-1 text-center sm:text-left">
+                <span className="text-sm font-semibold text-foreground">Importar Extrato Bancario</span>
+                <span className="text-xs text-muted-foreground mt-0.5">
+                  Envie o CSV do seu banco e todas as transacoes serao adicionadas automaticamente
+                </span>
+              </div>
+              <DialogTrigger asChild>
+                <Button className="gap-2 bg-primary text-primary-foreground hover:bg-primary/90 w-full sm:w-auto">
+                  <Upload className="w-4 h-4" />
+                  Importar CSV
+                </Button>
+              </DialogTrigger>
+            </div>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>Importar Extrato CSV</DialogTitle>
+                <DialogDescription>
+                  Selecione um arquivo CSV do seu extrato bancario. O arquivo deve conter colunas como descricao/description e valor/amount.
+                </DialogDescription>
+              </DialogHeader>
+              <div className="flex flex-col gap-4 py-4">
+                <div className="rounded-lg border border-dashed border-border p-6 text-center">
+                  <Upload className="w-8 h-8 text-muted-foreground mx-auto mb-3" />
+                  <p className="text-sm font-medium text-foreground mb-1">Arraste o arquivo aqui ou clique para selecionar</p>
+                  <p className="text-xs text-muted-foreground mb-3">
+                    Colunas aceitas: descricao, valor, data (ou em ingles)
+                  </p>
+                  <Input
+                    ref={fileInputRef}
+                    type="file"
+                    accept=".csv"
+                    onChange={handleCSVImport}
+                    className="cursor-pointer max-w-xs mx-auto"
+                  />
+                </div>
+              </div>
+            </DialogContent>
+          </Dialog>
+        </CardContent>
+      </Card>
+
       {/* Filters */}
       <Card>
         <CardContent className="p-4">
@@ -404,18 +422,12 @@ export default function DespesasPage() {
             </div>
           ) : (
             <div className="flex flex-col gap-1">
-              <AnimatePresence mode="popLayout">
                 {filteredExpenses.map((expense) => {
                   const cat = categories.find((c) => c.id === expense.category)
                   const PayIcon = paymentIcons[expense.paymentMethod] || HelpCircle
-                  return (
-                    <motion.div
+                    return (
+                    <div
                       key={expense.id}
-                      layout
-                      initial={{ opacity: 0, scale: 0.95 }}
-                      animate={{ opacity: 1, scale: 1 }}
-                      exit={{ opacity: 0, scale: 0.95, x: -20 }}
-                      transition={{ type: "spring", stiffness: 300, damping: 25 }}
                       className="flex items-center gap-3 py-3 px-3 rounded-lg hover:bg-muted/50 transition-colors group"
                     >
                       <div
@@ -455,15 +467,14 @@ export default function DespesasPage() {
                         >
                           <Trash2 className="w-4 h-4" />
                         </Button>
-                      </div>
-                    </motion.div>
+                        </div>
+                    </div>
                   )
                 })}
-              </AnimatePresence>
             </div>
           )}
         </CardContent>
       </Card>
-    </motion.div>
+    </div>
   )
 }
