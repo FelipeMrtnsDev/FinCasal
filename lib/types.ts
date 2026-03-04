@@ -65,3 +65,15 @@ export const PAYMENT_METHODS: { value: PaymentMethod; label: string }[] = [
   { value: "transferencia", label: "Transferencia" },
   { value: "outro", label: "Outro" },
 ]
+
+export interface User {
+  id: string
+  name: string
+  email: string
+  dashboardId?: string
+}
+
+export interface AuthResponse {
+  user: User
+  token: string
+}
