@@ -1,7 +1,7 @@
 "use client"
 
 import React, { createContext, useContext, useState, useEffect, useCallback } from "react"
-import type { FinanceState, Expense, Income, SavingsGoal, Category, ViewMode } from "@/lib/types"
+import type { FinanceState, Expense, Income, Investment, SavingsGoal, Category, ViewMode } from "@/lib/types"
 import { DEFAULT_CATEGORIES } from "@/lib/types"
 
 const STORAGE_KEY = "finance-app-data"
@@ -9,6 +9,7 @@ const STORAGE_KEY = "finance-app-data"
 const defaultState: FinanceState = {
   expenses: [],
   incomes: [],
+  investments: [],
   categories: DEFAULT_CATEGORIES,
   savingsGoals: [],
   viewMode: "casal",
@@ -20,6 +21,8 @@ interface FinanceContextType extends FinanceState {
   removeExpense: (id: string) => void
   addIncome: (income: Omit<Income, "id">) => void
   removeIncome: (id: string) => void
+  addInvestment: (investment: Omit<Investment, "id">) => void
+  removeInvestment: (id: string) => void
   addCategory: (category: Omit<Category, "id">) => void
   removeCategory: (id: string) => void
   addSavingsGoal: (goal: Omit<SavingsGoal, "id">) => void
@@ -78,6 +81,14 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
     setState((s) => ({ ...s, incomes: s.incomes.filter((i) => i.id !== id) }))
   }, [])
 
+  const addInvestment = useCallback((investment: Omit<Investment, "id">) => {
+    setState((s) => ({ ...s, investments: [...s.investments, { ...investment, id: genId() }] }))
+  }, [])
+
+  const removeInvestment = useCallback((id: string) => {
+    setState((s) => ({ ...s, investments: s.investments.filter((i) => i.id !== id) }))
+  }, [])
+
   const addCategory = useCallback((category: Omit<Category, "id">) => {
     setState((s) => ({
       ...s,
@@ -127,6 +138,8 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
         removeExpense,
         addIncome,
         removeIncome,
+        addInvestment,
+        removeInvestment,
         addCategory,
         removeCategory,
         addSavingsGoal,

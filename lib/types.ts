@@ -29,6 +29,26 @@ export interface Income {
   recurring: boolean
 }
 
+export type InvestmentType = "aporte" | "retorno" | "dividendo" | "venda" | "resgate"
+
+export interface Investment {
+  id: string
+  description: string
+  amount: number
+  date: string
+  person: Person
+  type: InvestmentType
+  asset: string
+}
+
+export const INVESTMENT_TYPES: { value: InvestmentType; label: string }[] = [
+  { value: "aporte", label: "Aporte" },
+  { value: "retorno", label: "Retorno" },
+  { value: "dividendo", label: "Dividendo" },
+  { value: "venda", label: "Venda" },
+  { value: "resgate", label: "Resgate" },
+]
+
 export interface SavingsGoal {
   id: string
   name: string
@@ -40,6 +60,7 @@ export interface SavingsGoal {
 export interface FinanceState {
   expenses: Expense[]
   incomes: Income[]
+  investments: Investment[]
   categories: Category[]
   savingsGoals: SavingsGoal[]
   viewMode: ViewMode
