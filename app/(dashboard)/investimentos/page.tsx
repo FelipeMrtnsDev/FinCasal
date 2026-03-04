@@ -13,6 +13,7 @@ import {
   DialogTitle,
   DialogFooter,
   DialogDescription,
+  DialogClose,
 } from "@/components/ui/dialog"
 import {
   Select,
@@ -31,8 +32,12 @@ import {
   DollarSign,
   LineChart as LineChartIcon,
   ArrowDownRight,
+  Calendar,
+  User,
+  Tag,
+  FileText,
 } from "lucide-react"
-import type { Person, InvestmentType } from "@/lib/types"
+import type { Person, InvestmentType, Investment } from "@/lib/types"
 import { INVESTMENT_TYPES } from "@/lib/types"
 import { format, parseISO } from "date-fns"
 import { cn } from "@/lib/utils"
@@ -194,6 +199,7 @@ const PIE_COLORS = ["#166534", "#21C25E", "#4ade80", "#0d9488", "#f59e0b"]
 export default function InvestimentosPage() {
   const { investments, removeInvestment, personNames, isLoaded } = useFinance()
   const [dialogOpen, setDialogOpen] = useState(false)
+  const [selectedInvestment, setSelectedInvestment] = useState<Investment | null>(null)
 
   const totalAportes = investments.filter((i) => i.type === "aporte").reduce((a, i) => a + i.amount, 0)
   const totalRetornos = investments
@@ -370,7 +376,7 @@ export default function InvestimentosPage() {
         )}
       </div>
 
-      {/* Investment list */}
+      {/* Investment list - Simplified */}
       <Card>
         <CardHeader>
           <CardTitle className="text-base">Historico de Operacoes</CardTitle>
@@ -386,49 +392,130 @@ export default function InvestimentosPage() {
                 .map((inv) => {
                   const Icon = INVEST_ICONS[inv.type]
                   const isInflow = inv.type !== "aporte"
+                  const typeLabel = INVESTMENT_TYPES.find((t) => t.value === inv.type)?.label || inv.type
                   return (
-                    <div
+                    <button
                       key={inv.id}
-                      className="flex items-center gap-3 py-3 px-3 rounded-lg hover:bg-muted/50 transition-colors group"
+                      type="button"
+                      onClick={() => setSelectedInvestment(inv)}
+                      className="flex items-center gap-3 py-3 px-3 rounded-lg hover:bg-muted/50 transition-colors w-full text-left cursor-pointer"
                     >
-                      <div className="w-9 h-9 rounded-full flex items-center justify-center shrink-0" style={{ backgroundColor: `${INVEST_COLORS[inv.type]}20` }}>
+                      <div
+                        className="w-9 h-9 rounded-full flex items-center justify-center shrink-0"
+                        style={{ backgroundColor: `${INVEST_COLORS[inv.type]}20` }}
+                      >
                         <Icon className="w-4 h-4" style={{ color: INVEST_COLORS[inv.type] }} />
                       </div>
                       <div className="flex flex-col min-w-0 flex-1">
-                        <span className="text-sm font-medium text-foreground truncate">{inv.description}</span>
-                        <div className="flex items-center gap-2 text-xs text-muted-foreground flex-wrap">
-                          <span className="px-1.5 py-0.5 rounded text-[10px] font-medium" style={{ backgroundColor: `${INVEST_COLORS[inv.type]}15`, color: INVEST_COLORS[inv.type] }}>
-                            {INVESTMENT_TYPES.find((t) => t.value === inv.type)?.label}
-                          </span>
-                          {inv.asset && <span className="truncate">{inv.asset}</span>}
-                          <span>{inv.person === "eu" ? personNames.eu : personNames.parceiro}</span>
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-2 shrink-0">
-                        <div className="flex flex-col items-end">
-                          <span className={cn("text-sm font-mono font-medium", isInflow ? "text-primary" : "text-amber-600")}>
-                            {isInflow ? "+" : "-"}{formatCurrency(inv.amount)}
-                          </span>
-                          <span className="text-xs text-muted-foreground">
-                            {(() => { try { return format(parseISO(inv.date), "dd/MM/yyyy") } catch { return inv.date } })()}
-                          </span>
-                        </div>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="opacity-0 group-hover:opacity-100 transition-opacity h-8 w-8 text-muted-foreground hover:text-destructive"
-                          onClick={() => removeInvestment(inv.id)}
+                        <span className="text-sm font-medium text-foreground truncate">{inv.asset || inv.description}</span>
+                        <span
+                          className="text-[10px] font-medium px-1.5 py-0.5 rounded w-fit"
+                          style={{ backgroundColor: `${INVEST_COLORS[inv.type]}15`, color: INVEST_COLORS[inv.type] }}
                         >
-                          <Trash2 className="w-4 h-4" />
-                        </Button>
+                          {typeLabel}
+                        </span>
                       </div>
-                    </div>
+                      <div className="flex flex-col items-end shrink-0">
+                        <span className={cn("text-sm font-mono font-medium", isInflow ? "text-primary" : "text-amber-600")}>
+                          {isInflow ? "+" : "-"}{formatCurrency(inv.amount)}
+                        </span>
+                        <span className="text-xs text-muted-foreground">
+                          {(() => { try { return format(parseISO(inv.date), "dd/MM") } catch { return inv.date } })()}
+                        </span>
+                      </div>
+                    </button>
                   )
                 })}
             </div>
           )}
         </CardContent>
       </Card>
+
+      {/* Detail Modal */}
+      <Dialog open={!!selectedInvestment} onOpenChange={(open) => { if (!open) setSelectedInvestment(null) }}>
+        <DialogContent className="max-w-sm">
+          {selectedInvestment && (() => {
+            const inv = selectedInvestment
+            const Icon = INVEST_ICONS[inv.type]
+            const isInflow = inv.type !== "aporte"
+            const typeLabel = INVESTMENT_TYPES.find((t) => t.value === inv.type)?.label || inv.type
+            return (
+              <>
+                <DialogHeader>
+                  <div className="flex items-center gap-3">
+                    <div
+                      className="w-11 h-11 rounded-xl flex items-center justify-center shrink-0"
+                      style={{ backgroundColor: `${INVEST_COLORS[inv.type]}20` }}
+                    >
+                      <Icon className="w-5 h-5" style={{ color: INVEST_COLORS[inv.type] }} />
+                    </div>
+                    <div>
+                      <DialogTitle className="text-lg">{inv.asset || "Sem ativo"}</DialogTitle>
+                      <DialogDescription>
+                        <span
+                          className="text-[11px] font-medium px-2 py-0.5 rounded"
+                          style={{ backgroundColor: `${INVEST_COLORS[inv.type]}15`, color: INVEST_COLORS[inv.type] }}
+                        >
+                          {typeLabel}
+                        </span>
+                      </DialogDescription>
+                    </div>
+                  </div>
+                </DialogHeader>
+                <div className="flex flex-col gap-4 py-4">
+                  <div className="text-center py-3 rounded-xl bg-muted/50">
+                    <span className={cn("text-2xl font-bold font-mono", isInflow ? "text-primary" : "text-amber-600")}>
+                      {isInflow ? "+" : "-"}{formatCurrency(inv.amount)}
+                    </span>
+                  </div>
+                  <div className="flex flex-col gap-3">
+                    <div className="flex items-center gap-3 text-sm">
+                      <FileText className="w-4 h-4 text-muted-foreground shrink-0" />
+                      <span className="text-muted-foreground">Descricao</span>
+                      <span className="ml-auto font-medium text-foreground truncate max-w-[180px]">{inv.description}</span>
+                    </div>
+                    <div className="flex items-center gap-3 text-sm">
+                      <Calendar className="w-4 h-4 text-muted-foreground shrink-0" />
+                      <span className="text-muted-foreground">Data</span>
+                      <span className="ml-auto font-medium text-foreground">
+                        {(() => { try { return format(parseISO(inv.date), "dd/MM/yyyy") } catch { return inv.date } })()}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-3 text-sm">
+                      <Tag className="w-4 h-4 text-muted-foreground shrink-0" />
+                      <span className="text-muted-foreground">Ativo</span>
+                      <span className="ml-auto font-medium text-foreground">{inv.asset || "Nao informado"}</span>
+                    </div>
+                    <div className="flex items-center gap-3 text-sm">
+                      <User className="w-4 h-4 text-muted-foreground shrink-0" />
+                      <span className="text-muted-foreground">Pessoa</span>
+                      <span className="ml-auto font-medium text-foreground">
+                        {inv.person === "eu" ? personNames.eu : personNames.parceiro}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+                <DialogFooter className="flex-row gap-2">
+                  <DialogClose asChild>
+                    <Button variant="outline" className="flex-1">Fechar</Button>
+                  </DialogClose>
+                  <Button
+                    variant="destructive"
+                    className="flex-1 gap-2"
+                    onClick={() => {
+                      removeInvestment(inv.id)
+                      setSelectedInvestment(null)
+                    }}
+                  >
+                    <Trash2 className="w-4 h-4" />
+                    Excluir
+                  </Button>
+                </DialogFooter>
+              </>
+            )
+          })()}
+        </DialogContent>
+      </Dialog>
 
       <InvestmentForm open={dialogOpen} onOpenChange={setDialogOpen} />
     </div>

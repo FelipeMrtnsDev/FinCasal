@@ -175,42 +175,12 @@ export default function DespesasPage() {
           </p>
         </div>
         <div className="flex items-center gap-2">
-          {/* CSV Import */}
-          <Dialog open={csvDialogOpen} onOpenChange={setCsvDialogOpen}>
-            <DialogTrigger asChild>
-              <Button variant="outline" size="sm" className="gap-2">
-                <Upload className="w-4 h-4" />
-                <span className="hidden sm:inline">Importar CSV</span>
-              </Button>
-            </DialogTrigger>
-            <DialogContent>
-              <DialogHeader>
-                <DialogTitle>Importar Extrato CSV</DialogTitle>
-                <DialogDescription>
-                  Selecione um arquivo CSV do seu extrato bancario. O arquivo deve conter colunas como descricao/description e valor/amount.
-                </DialogDescription>
-              </DialogHeader>
-              <div className="flex flex-col gap-4 py-4">
-                <p className="text-sm text-muted-foreground">
-                  Colunas aceitas: descricao, valor, data (ou em ingles: description, amount, date)
-                </p>
-                <Input
-                  ref={fileInputRef}
-                  type="file"
-                  accept=".csv"
-                  onChange={handleCSVImport}
-                  className="cursor-pointer"
-                />
-              </div>
-            </DialogContent>
-          </Dialog>
-
           {/* Add Expense */}
           <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
             <DialogTrigger asChild>
               <Button size="sm" className="gap-2 bg-primary text-primary-foreground hover:bg-primary/90">
                 <Plus className="w-4 h-4" />
-                <span className="hidden sm:inline">Nova Despesa</span>
+                Adicionar
               </Button>
             </DialogTrigger>
             <DialogContent className="max-w-md">
@@ -332,6 +302,55 @@ export default function DespesasPage() {
           </Dialog>
         </div>
       </div>
+
+      {/* CSV Import - Prominent Section */}
+      <Card className="border-dashed border-2 border-primary/30 bg-primary/5">
+        <CardContent className="p-4 sm:p-6">
+          <Dialog open={csvDialogOpen} onOpenChange={setCsvDialogOpen}>
+            <div className="flex flex-col sm:flex-row items-center gap-4">
+              <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center shrink-0">
+                <Upload className="w-6 h-6 text-primary" />
+              </div>
+              <div className="flex flex-col flex-1 text-center sm:text-left">
+                <span className="text-sm font-semibold text-foreground">Importar Extrato Bancario</span>
+                <span className="text-xs text-muted-foreground mt-0.5">
+                  Envie o CSV do seu banco e todas as transacoes serao adicionadas automaticamente
+                </span>
+              </div>
+              <DialogTrigger asChild>
+                <Button className="gap-2 bg-primary text-primary-foreground hover:bg-primary/90 w-full sm:w-auto">
+                  <Upload className="w-4 h-4" />
+                  Importar CSV
+                </Button>
+              </DialogTrigger>
+            </div>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>Importar Extrato CSV</DialogTitle>
+                <DialogDescription>
+                  Selecione um arquivo CSV do seu extrato bancario. O arquivo deve conter colunas como descricao/description e valor/amount.
+                </DialogDescription>
+              </DialogHeader>
+              <div className="flex flex-col gap-4 py-4">
+                <div className="rounded-lg border border-dashed border-border p-6 text-center">
+                  <Upload className="w-8 h-8 text-muted-foreground mx-auto mb-3" />
+                  <p className="text-sm font-medium text-foreground mb-1">Arraste o arquivo aqui ou clique para selecionar</p>
+                  <p className="text-xs text-muted-foreground mb-3">
+                    Colunas aceitas: descricao, valor, data (ou em ingles)
+                  </p>
+                  <Input
+                    ref={fileInputRef}
+                    type="file"
+                    accept=".csv"
+                    onChange={handleCSVImport}
+                    className="cursor-pointer max-w-xs mx-auto"
+                  />
+                </div>
+              </div>
+            </DialogContent>
+          </Dialog>
+        </CardContent>
+      </Card>
 
       {/* Filters */}
       <Card>
