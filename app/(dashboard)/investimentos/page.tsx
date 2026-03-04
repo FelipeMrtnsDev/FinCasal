@@ -200,6 +200,7 @@ export default function InvestimentosPage() {
   const { investments, removeInvestment, personNames, isLoaded } = useFinance()
   const [dialogOpen, setDialogOpen] = useState(false)
   const [selectedInvestment, setSelectedInvestment] = useState<Investment | null>(null)
+  const [selectedAsset, setSelectedAsset] = useState<typeof byAsset[0] | null>(null)
 
   const totalAportes = investments.filter((i) => i.type === "aporte").reduce((a, i) => a + i.amount, 0)
   const totalRetornos = investments
@@ -260,21 +261,21 @@ export default function InvestimentosPage() {
         {stats.map((stat) => (
           <Card key={stat.label}>
             <CardContent className="p-4">
-              <div className="flex items-center justify-between gap-2">
-                <div className="flex flex-col gap-1 min-w-0">
-                  <span className="text-xs font-medium text-muted-foreground truncate">{stat.label}</span>
-                  <span className={cn(
-                    "text-base sm:text-lg font-bold font-mono",
-                    stat.trend === "down" ? "text-amber-600" : "text-foreground"
-                  )}>
-                    {stat.trend === "neutral" ? stat.value : formatCurrency(stat.value)}
-                  </span>
-                </div>
+              <div className="flex flex-col gap-3">
                 <div className={cn(
                   "w-9 h-9 rounded-lg flex items-center justify-center shrink-0",
                   stat.trend === "down" ? "bg-amber-100" : "bg-primary/10"
                 )}>
                   <stat.icon className={cn("w-4 h-4", stat.trend === "down" ? "text-amber-600" : "text-primary")} />
+                </div>
+                <div className="flex flex-col gap-0.5">
+                  <span className="text-xs font-medium text-muted-foreground leading-tight">{stat.label}</span>
+                  <span className={cn(
+                    "text-base font-bold font-mono",
+                    stat.trend === "down" ? "text-amber-600" : "text-foreground"
+                  )}>
+                    {stat.trend === "neutral" ? stat.value : formatCurrency(stat.value)}
+                  </span>
                 </div>
               </div>
             </CardContent>
@@ -287,21 +288,23 @@ export default function InvestimentosPage() {
         <Card>
           <CardHeader>
             <CardTitle className="text-base">Por Ativo</CardTitle>
-            <CardDescription>Resumo de aportes e retornos por ativo</CardDescription>
+            <CardDescription>Toque para ver detalhes</CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="flex flex-col gap-3">
+            <div className="flex flex-col gap-1">
               {byAsset.map((asset) => (
-                <div key={asset.name} className="flex items-center gap-3 p-3 rounded-lg bg-muted/30">
+                <button
+                  key={asset.name}
+                  type="button"
+                  onClick={() => setSelectedAsset(asset)}
+                  className="flex items-center gap-3 py-3 px-3 rounded-lg hover:bg-muted/50 transition-colors w-full text-left cursor-pointer"
+                >
                   <div className="w-9 h-9 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
                     <LineChartIcon className="w-4 h-4 text-primary" />
                   </div>
                   <div className="flex flex-col flex-1 min-w-0">
                     <span className="text-sm font-semibold text-foreground truncate">{asset.name}</span>
-                    <div className="flex items-center gap-2 text-xs text-muted-foreground mt-0.5 flex-wrap">
-                      <span>Aporte: {formatCurrency(asset.aportes)}</span>
-                      <span>Retorno: {formatCurrency(asset.retornos)}</span>
-                    </div>
+                    <span className="text-xs text-muted-foreground">{formatCurrency(asset.aportes)} aportado</span>
                   </div>
                   <div className="flex flex-col items-end shrink-0">
                     <span className={cn("text-sm font-mono font-bold", asset.lucro >= 0 ? "text-primary" : "text-amber-600")}>
@@ -313,12 +316,64 @@ export default function InvestimentosPage() {
                       </span>
                     )}
                   </div>
-                </div>
+                </button>
               ))}
             </div>
           </CardContent>
         </Card>
       )}
+
+      {/* Asset Detail Modal */}
+      <Dialog open={!!selectedAsset} onOpenChange={(open) => { if (!open) setSelectedAsset(null) }}>
+        <DialogContent className="max-w-sm">
+          {selectedAsset && (
+            <>
+              <DialogHeader>
+                <div className="flex items-center gap-3">
+                  <div className="w-11 h-11 rounded-xl bg-primary/10 flex items-center justify-center shrink-0">
+                    <LineChartIcon className="w-5 h-5 text-primary" />
+                  </div>
+                  <div>
+                    <DialogTitle className="text-lg">{selectedAsset.name}</DialogTitle>
+                    <DialogDescription>Resumo do ativo</DialogDescription>
+                  </div>
+                </div>
+              </DialogHeader>
+              <div className="flex flex-col gap-4 py-2">
+                <div className={cn(
+                  "text-center py-4 rounded-xl",
+                  selectedAsset.lucro >= 0 ? "bg-primary/5" : "bg-amber-50"
+                )}>
+                  <span className="text-xs text-muted-foreground block mb-1">Resultado</span>
+                  <span className={cn("text-2xl font-bold font-mono", selectedAsset.lucro >= 0 ? "text-primary" : "text-amber-600")}>
+                    {selectedAsset.lucro >= 0 ? "+" : ""}{formatCurrency(selectedAsset.lucro)}
+                  </span>
+                  {selectedAsset.aportes > 0 && (
+                    <span className={cn("text-sm font-mono block mt-0.5", selectedAsset.lucro >= 0 ? "text-primary/70" : "text-amber-500")}>
+                      {selectedAsset.lucro >= 0 ? "+" : ""}{((selectedAsset.lucro / selectedAsset.aportes) * 100).toFixed(1)}%
+                    </span>
+                  )}
+                </div>
+                <div className="flex flex-col gap-3">
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-muted-foreground">Total aportado</span>
+                    <span className="font-mono font-medium text-amber-600">{formatCurrency(selectedAsset.aportes)}</span>
+                  </div>
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-muted-foreground">Total retornado</span>
+                    <span className="font-mono font-medium text-primary">{formatCurrency(selectedAsset.retornos)}</span>
+                  </div>
+                </div>
+              </div>
+              <DialogFooter>
+                <DialogClose asChild>
+                  <Button variant="outline" className="w-full">Fechar</Button>
+                </DialogClose>
+              </DialogFooter>
+            </>
+          )}
+        </DialogContent>
+      </Dialog>
 
       {/* Charts */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
