@@ -25,26 +25,6 @@ const itemVariants = {
 }
 
 export default function RegistroPage() {
-  const [googleLoading, setGoogleLoading] = useState(false)
-
-  const handleGoogleRegister = async () => {
-    setGoogleLoading(true)
-
-    try {
-      // Simulação do Google Login
-      // Em produção, isso redirecionaria para o Google ou usaria a SDK
-      // const googleIdToken = await getGoogleToken(); 
-      // await authService.googleLogin(googleIdToken);
-      setTimeout(() => {
-        setGoogleLoading(false)
-        window.location.href = "/"
-      }, 1500)
-    } catch (error) {
-      console.error(error)
-      setGoogleLoading(false)
-    }
-  }
-
   return (
     <div className="min-h-dvh flex items-center justify-center bg-background p-4">
       <AuthBackground />
@@ -70,8 +50,6 @@ export default function RegistroPage() {
             </CardHeader>
             <CardContent className="flex flex-col gap-6">
               <GoogleButton
-                onClick={handleGoogleRegister}
-                loading={googleLoading}
                 text="Registrar com Google"
               />
 

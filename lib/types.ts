@@ -15,9 +15,20 @@ export interface Expense {
   amount: number
   date: string
   category: string
-  paymentMethod: PaymentMethod
-  type: ExpenseType
+  categoryId?: string // Campo vindo do backend
+  paymentMethod: PaymentMethod | string // Backend pode retornar string como "CREDIT_CARD"
+  type: ExpenseType | string // Backend pode retornar string como "VARIABLE"
   person: Person
+  user?: {
+    name: string
+    avatarUrl?: string | null
+  }
+  categoryData?: { // Objeto category vindo do backend (renomeado para evitar conflito com category string)
+    name: string
+    color: string
+  }
+  // Permitir acesso direto à propriedade category vinda do backend se ela for um objeto
+  [key: string]: any 
 }
 
 export interface Income {
