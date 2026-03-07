@@ -31,7 +31,25 @@ export interface Income {
 
 export type InvestmentType = "aporte" | "retorno" | "dividendo" | "venda" | "resgate"
 
-export interface Investment {
+export interface SaleProduct {
+  id: string
+  name: string
+  category: string
+  costPrice: number
+  salePrice: number
+}
+
+export interface Sale {
+  id: string
+  productId: string
+  productName: string
+  category: string
+  quantity: number
+  unitCost: number
+  unitPrice: number
+  date: string
+  person: Person
+}
   id: string
   description: string
   amount: number
@@ -61,6 +79,8 @@ export interface FinanceState {
   expenses: Expense[]
   incomes: Income[]
   investments: Investment[]
+  saleProducts: SaleProduct[]
+  sales: Sale[]
   categories: Category[]
   savingsGoals: SavingsGoal[]
   viewMode: ViewMode

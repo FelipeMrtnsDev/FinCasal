@@ -1,7 +1,7 @@
 "use client"
 
 import React, { createContext, useContext, useState, useEffect, useCallback } from "react"
-import type { FinanceState, Expense, Income, Investment, SavingsGoal, Category, ViewMode } from "@/lib/types"
+import type { FinanceState, Expense, Income, Investment, SavingsGoal, Category, ViewMode, SaleProduct, Sale } from "@/lib/types"
 import { DEFAULT_CATEGORIES } from "@/lib/types"
 
 const STORAGE_KEY = "finance-app-data"
@@ -10,6 +10,8 @@ const defaultState: FinanceState = {
   expenses: [],
   incomes: [],
   investments: [],
+  saleProducts: [],
+  sales: [],
   categories: DEFAULT_CATEGORIES,
   savingsGoals: [],
   viewMode: "casal",
@@ -23,6 +25,11 @@ interface FinanceContextType extends FinanceState {
   removeIncome: (id: string) => void
   addInvestment: (investment: Omit<Investment, "id">) => void
   removeInvestment: (id: string) => void
+  addSaleProduct: (product: Omit<SaleProduct, "id">) => void
+  updateSaleProduct: (id: string, updates: Partial<SaleProduct>) => void
+  removeSaleProduct: (id: string) => void
+  addSale: (sale: Omit<Sale, "id">) => void
+  removeSale: (id: string) => void
   addCategory: (category: Omit<Category, "id">) => void
   removeCategory: (id: string) => void
   addSavingsGoal: (goal: Omit<SavingsGoal, "id">) => void
@@ -89,6 +96,29 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
     setState((s) => ({ ...s, investments: s.investments.filter((i) => i.id !== id) }))
   }, [])
 
+  const addSaleProduct = useCallback((product: Omit<SaleProduct, "id">) => {
+    setState((s) => ({ ...s, saleProducts: [...s.saleProducts, { ...product, id: genId() }] }))
+  }, [])
+
+  const updateSaleProduct = useCallback((id: string, updates: Partial<SaleProduct>) => {
+    setState((s) => ({
+      ...s,
+      saleProducts: s.saleProducts.map((p) => (p.id === id ? { ...p, ...updates } : p)),
+    }))
+  }, [])
+
+  const removeSaleProduct = useCallback((id: string) => {
+    setState((s) => ({ ...s, saleProducts: s.saleProducts.filter((p) => p.id !== id) }))
+  }, [])
+
+  const addSale = useCallback((sale: Omit<Sale, "id">) => {
+    setState((s) => ({ ...s, sales: [...s.sales, { ...sale, id: genId() }] }))
+  }, [])
+
+  const removeSale = useCallback((id: string) => {
+    setState((s) => ({ ...s, sales: s.sales.filter((s2) => s2.id !== id) }))
+  }, [])
+
   const addCategory = useCallback((category: Omit<Category, "id">) => {
     setState((s) => ({
       ...s,
@@ -140,6 +170,11 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
         removeIncome,
         addInvestment,
         removeInvestment,
+        addSaleProduct,
+        updateSaleProduct,
+        removeSaleProduct,
+        addSale,
+        removeSale,
         addCategory,
         removeCategory,
         addSavingsGoal,
