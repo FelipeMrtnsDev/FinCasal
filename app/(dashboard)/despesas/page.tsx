@@ -12,7 +12,7 @@ import { Expense, Category } from "@/lib/types"
 
 export default function DespesasPage() {
   const { viewMode, isLoaded: contextLoaded } = useFinance()
-  
+
   // Local state for expenses and categories to ensure fresh data from API
   const [expenses, setExpenses] = useState<Expense[]>([])
   const [categories, setCategories] = useState<Category[]>([])
@@ -30,6 +30,9 @@ export default function DespesasPage() {
         expenseService.getAll(),
         categoryService.getAll()
       ])
+
+      console.log("Fetched expenses:", expensesData)
+      console.log("Fetched categories:", categoriesData)
       setExpenses(expensesData)
       setCategories(categoriesData)
     } catch (error) {
@@ -64,7 +67,7 @@ export default function DespesasPage() {
     // Let's adjust CsvImport to use expenseService.create in loop or use importCsv endpoint if we want to send file.
     // The previous implementation in page.tsx used importCSV from context which took array.
     // expenseService.create takes one.
-    
+
     // Let's loop for now as it's safer without bulk endpoint info
     for (const expense of expensesData) {
       await expenseService.create(expense)
@@ -76,8 +79,35 @@ export default function DespesasPage() {
     return expenses
       .filter((e) => {
         if (searchTerm && !e.description.toLowerCase().includes(searchTerm.toLowerCase())) return false
-        if (filterCategory !== "all" && e.category !== filterCategory) return false
-        if (filterPayment !== "all" && e.paymentMethod !== filterPayment) return false
+
+        // Filtro de Categoria
+        if (filterCategory !== "all") {
+          // Tenta comparar com ID da categoria ou com o objeto category.id
+          const categoryId = e.categoryId || (typeof e.category === 'string' ? e.category : (e.category as any)?.id);
+          if (categoryId !== filterCategory) return false
+        }
+
+        // Filtro de Pagamento
+        if (filterPayment !== "all") {
+          // Normaliza para comparação (backend retorna CREDIT_CARD, filtro usa cartao ou CREDIT_CARD dependendo do value)
+          // Vamos assumir que o value do select filterPayment já está alinhado com o que vem do backend OU precisamos normalizar
+          // O PAYMENT_METHODS no types.ts usa "pix", "cartao". O backend retorna "PIX", "CREDIT_CARD".
+          // Precisamos de um de-para reverso ou ajustar o filtro.
+
+          const backendPaymentMap: Record<string, string> = {
+            "pix": "PIX",
+            "cartao": "CREDIT_CARD",
+            "dinheiro": "CASH",
+            "transferencia": "TRANSFER",
+            "outro": "OTHER"
+          };
+
+          const expectedBackendValue = backendPaymentMap[filterPayment] || filterPayment;
+
+          // Compara com o valor do backend (ex: CREDIT_CARD) ou o valor original se não tiver no map
+          if (e.paymentMethod !== expectedBackendValue && e.paymentMethod !== filterPayment) return false
+        }
+
         if (filterPerson !== "all" && e.person !== filterPerson) return false
         return true
       })
@@ -115,10 +145,11 @@ export default function DespesasPage() {
         setFilterPerson={setFilterPerson}
       />
 
-      <ExpenseList 
-        expenses={filteredExpenses} 
-        categories={categories} 
-        onDelete={handleDeleteExpense} 
+      <ExpenseList
+        expenses={filteredExpenses}
+        categories={categories}
+        loading={loading}
+        onDelete={handleDeleteExpense}
       />
     </div>
   )

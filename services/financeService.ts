@@ -62,6 +62,9 @@ export const incomeService = {
     return response.data;
   },
   delete: async (id: string): Promise<void> => {
+    // A rota base no app.ts é /api/incomes
+    // O axios chama /incomes/${id}
+    // Verificando se há barra extra no backend ou se o ID está vindo correto
     await api.delete(`/incomes/${id}`);
   },
 };
@@ -94,7 +97,11 @@ export const categoryService = {
     return response.data;
   },
   delete: async (id: string): Promise<void> => {
-    await api.delete(`/categories/${id}`);
+    await api.delete(`/incomes/${id}`);
+  },
+  update: async (id: string, data: any): Promise<Income> => {
+    const response = await api.put<Income>(`/incomes/${id}`, data);
+    return response.data;
   },
 };
 

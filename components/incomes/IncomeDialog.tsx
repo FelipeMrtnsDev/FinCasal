@@ -1,6 +1,7 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState } from "react"
+import { useFinance } from "@/lib/finance-context"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -9,9 +10,9 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
   DialogFooter,
   DialogDescription,
+  DialogTrigger,
 } from "@/components/ui/dialog"
 import {
   Select,
@@ -20,17 +21,16 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
+import { Switch } from "@/components/ui/switch"
 import { Plus } from "lucide-react"
 import { format } from "date-fns"
-import { Category, Expense, ExpenseType, PaymentMethod, Person, PAYMENT_METHODS } from "@/lib/types"
-import { useFinance } from "@/lib/finance-context"
+import { Person, Income } from "@/lib/types"
 
-interface ExpenseDialogProps {
-  categories: Category[]
-  onAdd: (expense: Omit<Expense, "id">) => Promise<void>
+interface IncomeDialogProps {
+  onAdd: (income: Omit<Income, "id">) => Promise<void>
 }
 
-export function ExpenseDialog({ categories, onAdd }: ExpenseDialogProps) {
+export function IncomeDialog({ onAdd }: IncomeDialogProps) {
   const { personNames } = useFinance()
   const [open, setOpen] = useState(false)
   const [loading, setLoading] = useState(false)
@@ -38,72 +38,41 @@ export function ExpenseDialog({ categories, onAdd }: ExpenseDialogProps) {
     description: "",
     amount: "",
     date: format(new Date(), "yyyy-MM-dd"),
-    category: "",
-    paymentMethod: "pix" as PaymentMethod,
-    type: "variavel" as ExpenseType,
     person: "eu" as Person,
+    recurring: false,
   })
 
-  // Update default category when categories load
-  useEffect(() => {
-    if (categories.length > 0 && !form.category) {
-      setForm(prev => ({ ...prev, category: categories[0].id }))
-    }
-  }, [categories])
-
-  const resetForm = () => {
+  const resetForm = () =>
     setForm({
       description: "",
       amount: "",
       date: format(new Date(), "yyyy-MM-dd"),
-      category: categories[0]?.id || "",
-      paymentMethod: "pix",
-      type: "variavel",
       person: "eu",
+      recurring: false,
     })
-  }
 
   const handleSubmit = async () => {
     if (!form.description || !form.amount || parseFloat(form.amount) <= 0) return
 
     setLoading(true)
     try {
-      // Mapeamento para o formato do backend
-      const backendPaymentMethod = {
-        pix: "PIX",
-        cartao: "CREDIT_CARD",
-        dinheiro: "CASH",
-        transferencia: "TRANSFER",
-        outro: "OTHER"
-      }[form.paymentMethod] || "OTHER";
-
-      const backendType = {
-        fixo: "FIXED",
-        variavel: "VARIABLE"
-      }[form.type] || "VARIABLE";
-
       // Formatar data para ISO 8601 completo (com hora)
-      // O backend espera algo como: 2026-03-10T15:30:00.000Z
       const dateObj = new Date(form.date);
-      // Adiciona hora atual para não ficar sempre 00:00
       const now = new Date();
       dateObj.setHours(now.getHours(), now.getMinutes(), now.getSeconds());
       const isoDate = dateObj.toISOString();
 
       await onAdd({
         description: form.description,
-        amount: parseFloat(form.amount),
+        amount: Number(parseFloat(form.amount).toFixed(2)), // Garante que seja um número com 2 casas decimais
         date: isoDate,
-        category: form.category,
-        categoryId: form.category, // Adiciona categoryId explicitamente para o backend
-        paymentMethod: backendPaymentMethod as any,
-        type: backendType as any,
         person: form.person,
+        recurring: form.recurring,
       })
       resetForm()
       setOpen(false)
     } catch (error) {
-      console.error("Error adding expense:", error)
+      console.error("Error adding income:", error)
     } finally {
       setLoading(false)
     }
@@ -114,13 +83,13 @@ export function ExpenseDialog({ categories, onAdd }: ExpenseDialogProps) {
       <DialogTrigger asChild>
         <Button size="sm" className="gap-2 bg-primary text-primary-foreground hover:bg-primary/90">
           <Plus className="w-4 h-4" />
-          Adicionar
+          Nova Renda
         </Button>
       </DialogTrigger>
       <DialogContent className="max-w-md">
         <DialogHeader>
-          <DialogTitle>Adicionar Despesa</DialogTitle>
-          <DialogDescription>Preencha os dados da nova despesa abaixo.</DialogDescription>
+          <DialogTitle>Adicionar Renda</DialogTitle>
+          <DialogDescription>Preencha os dados da nova fonte de renda.</DialogDescription>
         </DialogHeader>
         <div className="flex flex-col gap-4 py-2">
           <div className="flex flex-col gap-2">
@@ -128,7 +97,7 @@ export function ExpenseDialog({ categories, onAdd }: ExpenseDialogProps) {
             <Input
               value={form.description}
               onChange={(e) => setForm({ ...form, description: e.target.value })}
-              placeholder="Ex: Almoco no restaurante"
+              placeholder="Ex: Salario, Freelance, Bonus..."
             />
           </div>
           <div className="grid grid-cols-2 gap-4">
@@ -154,61 +123,8 @@ export function ExpenseDialog({ categories, onAdd }: ExpenseDialogProps) {
           </div>
           <div className="grid grid-cols-2 gap-4">
             <div className="flex flex-col gap-2">
-              <Label>Categoria</Label>
-              <Select value={form.category} onValueChange={(v) => setForm({ ...form, category: v })}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Selecione" />
-                </SelectTrigger>
-                <SelectContent>
-                  {categories.map((cat) => (
-                    <SelectItem key={cat.id} value={cat.id}>
-                      {cat.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="flex flex-col gap-2">
-              <Label>Pagamento</Label>
-              <Select
-                value={form.paymentMethod}
-                onValueChange={(v) => setForm({ ...form, paymentMethod: v as PaymentMethod })}
-              >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {PAYMENT_METHODS.map((pm) => (
-                    <SelectItem key={pm.value} value={pm.value}>
-                      {pm.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-          <div className="grid grid-cols-2 gap-4">
-            <div className="flex flex-col gap-2">
-              <Label>Tipo</Label>
-              <Select
-                value={form.type}
-                onValueChange={(v) => setForm({ ...form, type: v as ExpenseType })}
-              >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="fixo">Fixo</SelectItem>
-                  <SelectItem value="variavel">Variavel</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="flex flex-col gap-2">
               <Label>Pessoa</Label>
-              <Select
-                value={form.person}
-                onValueChange={(v) => setForm({ ...form, person: v as Person })}
-              >
+              <Select value={form.person} onValueChange={(v) => setForm({ ...form, person: v as Person })}>
                 <SelectTrigger>
                   <SelectValue />
                 </SelectTrigger>
@@ -217,6 +133,13 @@ export function ExpenseDialog({ categories, onAdd }: ExpenseDialogProps) {
                   <SelectItem value="parceiro">{personNames.parceiro}</SelectItem>
                 </SelectContent>
               </Select>
+            </div>
+            <div className="flex flex-col gap-2">
+              <Label>Recorrente</Label>
+              <div className="flex items-center gap-2 h-9">
+                <Switch checked={form.recurring} onCheckedChange={(checked) => setForm({ ...form, recurring: checked })} />
+                <span className="text-sm text-muted-foreground">{form.recurring ? "Sim" : "Nao"}</span>
+              </div>
             </div>
           </div>
         </div>
