@@ -50,6 +50,8 @@ export interface Sale {
   date: string
   person: Person
 }
+
+export interface Investment {
   id: string
   description: string
   amount: number
