@@ -1,7 +1,7 @@
 "use client"
 
 import React, { createContext, useContext, useState, useEffect, useCallback } from "react"
-import type { FinanceState, Expense, Income, Investment, SavingsGoal, Category, ViewMode, SaleProduct, Sale } from "@/lib/types"
+import type { FinanceState, Expense, Income, Investment, SavingsGoal, Category, ViewMode, SaleProduct, Sale, Budget } from "@/lib/types"
 import { DEFAULT_CATEGORIES } from "@/lib/types"
 
 const STORAGE_KEY = "finance-app-data"
@@ -14,6 +14,7 @@ const defaultState: FinanceState = {
   sales: [],
   categories: DEFAULT_CATEGORIES,
   savingsGoals: [],
+  budgets: [],
   viewMode: "casal",
   personNames: { eu: "Eu", parceiro: "Parceiro(a)" },
 }
@@ -35,6 +36,9 @@ interface FinanceContextType extends FinanceState {
   addSavingsGoal: (goal: Omit<SavingsGoal, "id">) => void
   updateSavingsGoal: (id: string, updates: Partial<SavingsGoal>) => void
   removeSavingsGoal: (id: string) => void
+  addBudget: (budget: Omit<Budget, "id">) => void
+  updateBudget: (id: string, updates: Partial<Budget>) => void
+  removeBudget: (id: string) => void
   setViewMode: (mode: ViewMode) => void
   setPersonNames: (names: { eu: string; parceiro: string }) => void
   importCSV: (data: Omit<Expense, "id">[]) => void
@@ -145,6 +149,21 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
     setState((s) => ({ ...s, savingsGoals: s.savingsGoals.filter((g) => g.id !== id) }))
   }, [])
 
+  const addBudget = useCallback((budget: Omit<Budget, "id">) => {
+    setState((s) => ({ ...s, budgets: [...s.budgets, { ...budget, id: genId() }] }))
+  }, [])
+
+  const updateBudget = useCallback((id: string, updates: Partial<Budget>) => {
+    setState((s) => ({
+      ...s,
+      budgets: s.budgets.map((b) => (b.id === id ? { ...b, ...updates } : b)),
+    }))
+  }, [])
+
+  const removeBudget = useCallback((id: string) => {
+    setState((s) => ({ ...s, budgets: s.budgets.filter((b) => b.id !== id) }))
+  }, [])
+
   const setViewMode = useCallback((mode: ViewMode) => {
     setState((s) => ({ ...s, viewMode: mode }))
   }, [])
@@ -180,6 +199,9 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
         addSavingsGoal,
         updateSavingsGoal,
         removeSavingsGoal,
+        addBudget,
+        updateBudget,
+        removeBudget,
         setViewMode,
         setPersonNames,
         importCSV,

@@ -77,6 +77,14 @@ export interface SavingsGoal {
   deadline: string
 }
 
+export interface Budget {
+  id: string
+  categoryId: string
+  categoryName: string
+  limitAmount: number
+  month: string
+}
+
 export interface FinanceState {
   expenses: Expense[]
   incomes: Income[]
@@ -85,6 +93,7 @@ export interface FinanceState {
   sales: Sale[]
   categories: Category[]
   savingsGoals: SavingsGoal[]
+  budgets: Budget[]
   viewMode: ViewMode
   personNames: { eu: string; parceiro: string }
 }
