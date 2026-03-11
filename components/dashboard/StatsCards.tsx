@@ -1,19 +1,21 @@
 "use client"
 
 import { Card, CardContent } from "@/components/ui/card"
+import { Skeleton } from "@/components/ui/skeleton"
 import { ArrowUpRight, ArrowDownRight, TrendingUp, TrendingDown, Wallet, Smartphone, CreditCard, PiggyBank } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { DashboardSummary } from "@/services/summaryService"
 
 interface StatsCardsProps {
   summary: DashboardSummary
+  loading?: boolean
 }
 
 function formatCurrency(value: number) {
   return (value || 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })
 }
 
-export function StatsCards({ summary }: StatsCardsProps) {
+export function StatsCards({ summary, loading = false }: StatsCardsProps) {
   const stats = [
     { label: "Renda Total", value: summary.totalIncomes, icon: TrendingUp, trend: "up" as const, color: "text-primary", bg: "bg-primary/10" },
     { label: "Despesas", value: summary.totalExpenses, icon: TrendingDown, trend: "down" as const, color: "text-destructive", bg: "bg-destructive/10" },
@@ -31,9 +33,13 @@ export function StatsCards({ summary }: StatsCardsProps) {
             <div className="flex items-center justify-between gap-2">
               <div className="flex flex-col gap-1 min-w-0">
                 <span className="text-[11px] sm:text-xs font-medium text-muted-foreground truncate">{stat.label}</span>
-                <span className="text-sm sm:text-lg font-bold text-foreground font-mono truncate">
-                  {formatCurrency(stat.value)}
-                </span>
+                {loading ? (
+                  <Skeleton className="h-5 w-28" />
+                ) : (
+                  <span className="text-sm sm:text-lg font-bold text-foreground font-mono truncate">
+                    {formatCurrency(stat.value)}
+                  </span>
+                )}
               </div>
               <div className={cn("w-8 h-8 sm:w-9 sm:h-9 rounded-lg flex items-center justify-center shrink-0", stat.bg)}>
                 <stat.icon className={cn("w-3.5 h-3.5 sm:w-4 sm:h-4", stat.color)} />

@@ -1,6 +1,7 @@
 "use client"
 
 import { Card, CardContent } from "@/components/ui/card"
+import { Skeleton } from "@/components/ui/skeleton"
 import { cn } from "@/lib/utils"
 import { PiggyBank, TrendingUp, Wallet } from "lucide-react"
 import { formatCurrency } from "./utils"
@@ -8,9 +9,10 @@ import { formatCurrency } from "./utils"
 type BudgetSummaryStatsProps = {
   totalBudget: number
   totalSpentOnBudgets: number
+  loading?: boolean
 }
 
-export function BudgetSummaryStats({ totalBudget, totalSpentOnBudgets }: BudgetSummaryStatsProps) {
+export function BudgetSummaryStats({ totalBudget, totalSpentOnBudgets, loading = false }: BudgetSummaryStatsProps) {
   return (
     <div className="grid grid-cols-3 gap-3">
       {[
@@ -26,7 +28,11 @@ export function BudgetSummaryStats({ totalBudget, totalSpentOnBudgets }: BudgetS
               </div>
               <div className="flex flex-col gap-0.5">
                 <span className="text-[10px] sm:text-xs text-muted-foreground font-medium">{s.label}</span>
-                <span className={cn("text-sm sm:text-base font-bold font-mono", s.color)}>{s.value}</span>
+                {loading ? (
+                  <Skeleton className="h-5 w-24" />
+                ) : (
+                  <span className={cn("text-sm sm:text-base font-bold font-mono", s.color)}>{s.value}</span>
+                )}
               </div>
             </div>
           </CardContent>

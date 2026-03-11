@@ -2,15 +2,12 @@
 
 import { TrendingUp, ShoppingBag } from "lucide-react"
 import { useFinance } from "@/lib/finance-context"
-import { PageSkeleton } from "@/components/skeleton-loader"
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { SalesTabContent } from "@/components/sales/SalesTabContent"
 import { InvestmentsTabContent } from "./InvestmentsTabContent"
 
 export function InvestimentosClient() {
-  const { personNames, isLoaded } = useFinance()
-
-  if (!isLoaded) return <PageSkeleton />
+  const { personNames } = useFinance()
 
   return (
     <div className="flex flex-col gap-6">

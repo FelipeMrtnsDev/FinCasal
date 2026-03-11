@@ -1,7 +1,6 @@
-import { format } from "date-fns";
-import { ptBR } from "date-fns/locale";
 import { Budget, BudgetStatus } from "./types";
 import { BudgetStatusDTO } from "@/services/financeService";
+import { getMonthOptionsFromStart as getMonthOptionsFromStartBase } from "@/lib/month-options";
 
 export function formatCurrency(value: number) {
   return value.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
@@ -32,12 +31,9 @@ export function getBudgetStatus(
 }
 
 export function getMonthOptions() {
-  return Array.from({ length: 6 }, (_, i) => {
-    const d = new Date();
-    d.setMonth(d.getMonth() + i);
-    return {
-      value: format(d, "yyyy-MM"),
-      label: format(d, "MMMM yyyy", { locale: ptBR }),
-    };
-  });
+  return getMonthOptionsFromStartBase(new Date().toISOString().slice(0, 7));
+}
+
+export function getMonthOptionsFromStart(startMonth: string) {
+  return getMonthOptionsFromStartBase(startMonth);
 }

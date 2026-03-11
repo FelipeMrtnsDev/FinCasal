@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { cn } from "@/lib/utils"
 import { Category } from "@/lib/types"
-import { Trash2, Wallet } from "lucide-react"
+import { Loader2, Trash2, Wallet } from "lucide-react"
 import { BudgetStatus } from "./types"
 import { formatCurrency } from "./utils"
 
@@ -16,9 +16,10 @@ type BudgetListCardProps = {
   categories: Category[]
   budgetStatus: BudgetStatus[]
   removeBudget: (id: string) => Promise<void>
+  deletingId?: string | null
 }
 
-export function BudgetListCard({ selectedMonth, categories, budgetStatus, removeBudget }: BudgetListCardProps) {
+export function BudgetListCard({ selectedMonth, categories, budgetStatus, removeBudget, deletingId }: BudgetListCardProps) {
   if (budgetStatus.length === 0) {
     return (
       <Card>
@@ -53,8 +54,18 @@ export function BudgetListCard({ selectedMonth, categories, budgetStatus, remove
                   <div className="flex items-center gap-2 shrink-0">
                     <span className={cn("text-xs font-mono font-semibold", b.isOver ? "text-destructive" : "text-foreground")}>{formatCurrency(b.spent)}</span>
                     <span className="text-xs text-muted-foreground font-mono">/ {formatCurrency(b.limitAmount)}</span>
-                    <Button variant="ghost" size="icon" className="w-7 h-7 text-muted-foreground hover:text-destructive" onClick={() => removeBudget(b.id)}>
-                      <Trash2 className="w-3.5 h-3.5" />
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="w-7 h-7 text-muted-foreground hover:text-destructive"
+                      onClick={() => removeBudget(b.id)}
+                      disabled={deletingId === b.id}
+                    >
+                      {deletingId === b.id ? (
+                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      ) : (
+                        <Trash2 className="w-3.5 h-3.5" />
+                      )}
                     </Button>
                   </div>
                 </div>

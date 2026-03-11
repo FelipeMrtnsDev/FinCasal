@@ -7,24 +7,26 @@ import { TabsContent } from "@/components/ui/tabs"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { budgetService, categoryService } from "@/services/financeService"
 import { Category } from "@/lib/types"
+import { useFinance } from "@/lib/finance-context"
 import { BudgetDialog } from "./BudgetDialog"
 import { BudgetListCard } from "./BudgetListCard"
 import { BudgetSummaryStats } from "./BudgetSummaryStats"
 import { Budget } from "./types"
-import { getBudgetStatus, getMonthOptions } from "./utils"
+import { getBudgetStatus, getMonthOptionsFromStart } from "./utils"
 
 export function BudgetTabContent() {
+  const { startMonth } = useFinance()
   const [categories, setCategories] = useState<Category[]>([])
   const [loadingCategories, setLoadingCategories] = useState(true)
   const [monthBudgets, setMonthBudgets] = useState<Budget[]>([])
   const [budgetStatus, setBudgetStatus] = useState<ReturnType<typeof getBudgetStatus>>([])
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
+  const [deletingId, setDeletingId] = useState<string | null>(null)
   const [selectedMonth, setSelectedMonth] = useState(format(new Date(), "yyyy-MM"))
   const [budgetDialogOpen, setBudgetDialogOpen] = useState(false)
   const [budgetForm, setBudgetForm] = useState({ categoryId: "", limitAmount: "" })
-
-  const monthOptions = useMemo(() => getMonthOptions(), [])
+  const monthOptions = useMemo(() => getMonthOptionsFromStart(startMonth), [startMonth])
 
   useEffect(() => {
     const loadCategories = async () => {
@@ -108,8 +110,14 @@ export function BudgetTabContent() {
   }
 
   const removeBudget = async (id: string) => {
-    await budgetService.delete(id)
-    await loadMonthData(selectedMonth)
+    if (deletingId) return
+    setDeletingId(id)
+    try {
+      await budgetService.delete(id)
+      await loadMonthData(selectedMonth)
+    } finally {
+      setDeletingId(null)
+    }
   }
 
   return (
@@ -149,15 +157,14 @@ export function BudgetTabContent() {
         </div>
       )}
 
-      {!loading && monthBudgets.length > 0 && (
-        <BudgetSummaryStats totalBudget={totalBudget} totalSpentOnBudgets={totalSpentOnBudgets} />
-      )}
+      <BudgetSummaryStats totalBudget={totalBudget} totalSpentOnBudgets={totalSpentOnBudgets} loading={loading} />
 
       <BudgetListCard
         selectedMonth={selectedMonth}
         categories={categories}
         budgetStatus={budgetStatus}
         removeBudget={removeBudget}
+        deletingId={deletingId}
       />
     </TabsContent>
   )

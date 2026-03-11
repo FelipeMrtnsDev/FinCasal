@@ -6,7 +6,7 @@ import { ExpenseDialog } from "@/components/expenses/ExpenseDialog"
 import { CsvImport } from "@/components/expenses/CsvImport"
 import { ExpenseFilters } from "@/components/expenses/ExpenseFilters"
 import { ExpenseList } from "@/components/expenses/ExpenseList"
-import { PageSkeleton } from "@/components/skeleton-loader"
+import { Skeleton } from "@/components/ui/skeleton"
 import { expenseService, categoryService } from "@/services/financeService"
 import { Expense, Category } from "@/lib/types"
 
@@ -83,7 +83,7 @@ export default function DespesasPage() {
         // Filtro de Categoria
         if (filterCategory !== "all") {
           // Tenta comparar com ID da categoria ou com o objeto category.id
-          const categoryId = e.categoryId || (typeof e.category === 'string' ? e.category : (e.category as any)?.id);
+          const categoryId = e.categoryId || (typeof e.category === "string" ? e.category : e.category.id)
           if (categoryId !== filterCategory) return false
         }
 
@@ -114,8 +114,6 @@ export default function DespesasPage() {
       .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
   }, [expenses, searchTerm, filterCategory, filterPayment, filterPerson])
 
-  if (loading && !contextLoaded) return <PageSkeleton />
-
   return (
     <div className="flex flex-col gap-6 p-4 md:p-8 pt-6">
       {/* Header */}
@@ -123,7 +121,10 @@ export default function DespesasPage() {
         <div>
           <h1 className="text-2xl md:text-3xl font-bold text-foreground">Despesas</h1>
           <p className="text-muted-foreground text-sm mt-1">
-            {filteredExpenses.length} despesas registradas
+            <span className="inline-flex items-center">
+              {loading && !contextLoaded ? <Skeleton className="h-4 w-8" /> : filteredExpenses.length}
+            </span>{" "}
+            despesas registradas
           </p>
         </div>
         <div className="flex items-center gap-2">

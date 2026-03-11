@@ -121,15 +121,17 @@ export function ExpenseList({ expenses, categories, loading = false, onDelete }:
               {expenses.map((expense) => {
                 // Tenta encontrar a categoria pelo ID (categoryId ou category string)
                 // OU usa o objeto category aninhado se vier da API
-                const categoryId = expense.categoryId || (typeof expense.category === 'string' ? expense.category : '');
+                const categoryId =
+                  expense.categoryId ||
+                  (typeof expense.category === "string" ? expense.category : expense.category.id)
 
                 let catName = "Sem categoria";
                 let catColor = undefined;
 
                 // Prioridade 1: Objeto category aninhado vindo da API
-                if (expense.category && typeof expense.category === 'object' && 'name' in expense.category) {
-                  catName = (expense.category as any).name;
-                  catColor = (expense.category as any).color;
+                if (typeof expense.category === "object") {
+                  catName = expense.category.name
+                  catColor = expense.category.color
                 }
                 // Prioridade 2: Buscar na lista de categorias pelo ID
                 else {

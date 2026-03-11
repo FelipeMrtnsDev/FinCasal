@@ -94,8 +94,6 @@ export function InvestmentsTabContent({ personNames }: InvestmentsTabContentProp
     { label: "Operacoes", value: investments.length, icon: BarChart3, trend: "neutral" },
   ]
 
-  if (loading) return null
-
   return (
     <TabsContent value="investimentos" className="flex flex-col gap-6 mt-4">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
@@ -109,24 +107,26 @@ export function InvestmentsTabContent({ personNames }: InvestmentsTabContentProp
         </Button>
       </div>
 
-      <InvestmentStatsCards stats={stats} />
+      <InvestmentStatsCards stats={stats} loading={loading} />
 
-      <InvestmentAssetCards byAsset={byAsset} onSelect={setSelectedAsset} />
+      {!loading && <InvestmentAssetCards byAsset={byAsset} onSelect={setSelectedAsset} />}
 
-      <InvestmentCharts byType={byType} byAsset={byAsset} />
+      {!loading && <InvestmentCharts byType={byType} byAsset={byAsset} />}
 
-      <InvestmentOperationsList investments={investments} onSelect={setSelectedInvestment} />
+      {!loading && <InvestmentOperationsList investments={investments} onSelect={setSelectedInvestment} />}
 
-      <InvestmentAssetDialog selectedAsset={selectedAsset} onClose={() => setSelectedAsset(null)} />
+      {!loading && <InvestmentAssetDialog selectedAsset={selectedAsset} onClose={() => setSelectedAsset(null)} />}
 
-      <InvestmentDetailDialog
-        investment={selectedInvestment}
-        personNames={personNames}
-        onClose={() => setSelectedInvestment(null)}
-        onDelete={handleDeleteInvestment}
-      />
+      {!loading && (
+        <InvestmentDetailDialog
+          investment={selectedInvestment}
+          personNames={personNames}
+          onClose={() => setSelectedInvestment(null)}
+          onDelete={handleDeleteInvestment}
+        />
+      )}
 
-      <InvestmentFormDialog open={dialogOpen} onOpenChange={setDialogOpen} onSubmit={handleAddInvestment} />
+      {!loading && <InvestmentFormDialog open={dialogOpen} onOpenChange={setDialogOpen} onSubmit={handleAddInvestment} />}
     </TabsContent>
   )
 }

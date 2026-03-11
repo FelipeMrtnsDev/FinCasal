@@ -14,6 +14,8 @@ const defaultState: FinanceState = {
   savingsGoals: [],
   viewMode: "casal",
   personNames: { eu: "Eu", parceiro: "Parceiro(a)" },
+  currentMonth: new Date().toISOString().slice(0, 7),
+  startMonth: new Date().toISOString().slice(0, 7),
 }
 
 interface FinanceContextType extends FinanceState {
@@ -30,6 +32,7 @@ interface FinanceContextType extends FinanceState {
   removeSavingsGoal: (id: string) => void
   setViewMode: (mode: ViewMode) => void
   setPersonNames: (names: { eu: string; parceiro: string }) => void
+  setCurrentMonth: (month: string) => void
   importCSV: (data: Omit<Expense, "id">[]) => void
   isLoaded: boolean
 }
@@ -45,10 +48,14 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
       const saved = localStorage.getItem(STORAGE_KEY)
       if (saved) {
         const parsed = JSON.parse(saved) as FinanceState
+        const currentMonth = typeof parsed.currentMonth === "string" ? parsed.currentMonth : defaultState.currentMonth
+        const startMonth = typeof parsed.startMonth === "string" ? parsed.startMonth : currentMonth
         setState({
           ...defaultState,
           ...parsed,
           categories: parsed.categories?.length ? parsed.categories : DEFAULT_CATEGORIES,
+          currentMonth,
+          startMonth,
         })
       }
     } catch {
@@ -123,6 +130,10 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
     setState((s) => ({ ...s, personNames: names }))
   }, [])
 
+  const setCurrentMonth = useCallback((month: string) => {
+    setState((s) => ({ ...s, currentMonth: month }))
+  }, [])
+
   const importCSV = useCallback((data: Omit<Expense, "id">[]) => {
     setState((s) => ({
       ...s,
@@ -147,6 +158,7 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
         removeSavingsGoal,
         setViewMode,
         setPersonNames,
+        setCurrentMonth,
         importCSV,
         isLoaded,
       }}

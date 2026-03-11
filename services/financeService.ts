@@ -182,15 +182,18 @@ export const categoryService = {
     const response = await api.get<Category[]>("/categories");
     return response.data;
   },
-  create: async (data: any): Promise<Category> => {
+  create: async (data: Omit<Category, "id">): Promise<Category> => {
     const response = await api.post<Category>("/categories", data);
     return response.data;
   },
   delete: async (id: string): Promise<void> => {
-    await api.delete(`/incomes/${id}`);
+    await api.delete(`/categories/${id}`);
   },
-  update: async (id: string, data: any): Promise<Income> => {
-    const response = await api.put<Income>(`/incomes/${id}`, data);
+  update: async (
+    id: string,
+    data: Partial<Omit<Category, "id">>,
+  ): Promise<Category> => {
+    const response = await api.patch<Category>(`/categories/${id}`, data);
     return response.data;
   },
 };

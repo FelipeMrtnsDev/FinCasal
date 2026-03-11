@@ -1,15 +1,17 @@
 "use client"
 
 import { Card, CardContent } from "@/components/ui/card"
+import { Skeleton } from "@/components/ui/skeleton"
 import { cn } from "@/lib/utils"
 import type { InvestmentStat } from "./types"
 import { formatCurrency } from "./constants"
 
 type InvestmentStatsCardsProps = {
   stats: InvestmentStat[]
+  loading?: boolean
 }
 
-export function InvestmentStatsCards({ stats }: InvestmentStatsCardsProps) {
+export function InvestmentStatsCards({ stats, loading = false }: InvestmentStatsCardsProps) {
   return (
     <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
       {stats.map((stat) => (
@@ -21,9 +23,13 @@ export function InvestmentStatsCards({ stats }: InvestmentStatsCardsProps) {
               </div>
               <div className="flex flex-col gap-0.5">
                 <span className="text-xs font-medium text-muted-foreground leading-tight">{stat.label}</span>
-                <span className={cn("text-base font-bold font-mono", stat.trend === "down" ? "text-amber-600" : "text-foreground")}>
-                  {stat.trend === "neutral" ? stat.value : formatCurrency(stat.value)}
-                </span>
+                {loading ? (
+                  <Skeleton className="h-5 w-24" />
+                ) : (
+                  <span className={cn("text-base font-bold font-mono", stat.trend === "down" ? "text-amber-600" : "text-foreground")}>
+                    {stat.trend === "neutral" ? stat.value : formatCurrency(stat.value)}
+                  </span>
+                )}
               </div>
             </div>
           </CardContent>

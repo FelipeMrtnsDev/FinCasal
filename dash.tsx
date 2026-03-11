@@ -44,7 +44,6 @@ import {
   RadialBar,
 } from "recharts"
 import { cn } from "@/lib/utils"
-import { PageSkeleton } from "@/components/skeleton-loader"
 import { motion } from "framer-motion"
 
 function formatCurrency(value: number) {
@@ -71,8 +70,6 @@ function CustomTooltipContent({ active, payload, label }: { active?: boolean; pa
 
 export default function DashboardPage() {
   const { expenses, incomes, categories, viewMode, personNames, isLoaded } = useFinance()
-
-  if (!isLoaded) return <PageSkeleton />
 
   const now = new Date()
   const monthStart = startOfMonth(now)
@@ -108,7 +105,7 @@ export default function DashboardPage() {
   const categoryData = categories
     .map((cat) => ({
       name: cat.name,
-      value: currentMonthExpenses.filter((e) => e.category === cat.id).reduce((a, e) => a + e.amount, 0),
+      value: currentMonthExpenses.filter((e) => (typeof e.category === "string" ? e.category : e.category.id) === cat.id).reduce((a, e) => a + e.amount, 0),
       color: cat.color,
     }))
     .filter((c) => c.value > 0)
@@ -145,11 +142,11 @@ export default function DashboardPage() {
 
   const radarData = categories
     .map((cat) => {
-      const euVal = currentMonthExpenses.filter((e) => e.category === cat.id && e.person === "eu").reduce((a, e) => a + e.amount, 0)
-      const parceiroVal = currentMonthExpenses.filter((e) => e.category === cat.id && e.person === "parceiro").reduce((a, e) => a + e.amount, 0)
+      const euVal = currentMonthExpenses.filter((e) => (typeof e.category === "string" ? e.category : e.category.id) === cat.id && e.person === "eu").reduce((a, e) => a + e.amount, 0)
+      const parceiroVal = currentMonthExpenses.filter((e) => (typeof e.category === "string" ? e.category : e.category.id) === cat.id && e.person === "parceiro").reduce((a, e) => a + e.amount, 0)
       return { category: cat.name, [personNames.eu]: euVal, [personNames.parceiro]: parceiroVal }
     })
-    .filter((d) => d[personNames.eu] > 0 || d[personNames.parceiro] > 0)
+    .filter((d) => Number(d[personNames.eu]) > 0 || Number(d[personNames.parceiro]) > 0)
 
   const fixedVarRadial = [
     { name: "Variaveis", value: variableExpenses, fill: "#4ade80" },

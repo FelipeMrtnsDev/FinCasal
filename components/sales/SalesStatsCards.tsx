@@ -1,15 +1,17 @@
 "use client"
 
 import { Card, CardContent } from "@/components/ui/card"
+import { Skeleton } from "@/components/ui/skeleton"
 import { cn } from "@/lib/utils"
 import { SalesStat } from "./types"
 import { formatCurrency } from "./utils"
 
 type SalesStatsCardsProps = {
   stats: SalesStat[]
+  loading?: boolean
 }
 
-export function SalesStatsCards({ stats }: SalesStatsCardsProps) {
+export function SalesStatsCards({ stats, loading = false }: SalesStatsCardsProps) {
   return (
     <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
       {stats.map((stat) => (
@@ -21,9 +23,13 @@ export function SalesStatsCards({ stats }: SalesStatsCardsProps) {
               </div>
               <div className="flex flex-col gap-0.5">
                 <span className="text-xs font-medium text-muted-foreground leading-tight">{stat.label}</span>
-                <span className={cn("text-base font-bold font-mono", stat.color === "amber" ? "text-amber-600" : "text-foreground")}>
-                  {stat.color === "neutral" ? stat.value : formatCurrency(stat.value)}
-                </span>
+                {loading ? (
+                  <Skeleton className="h-5 w-24" />
+                ) : (
+                  <span className={cn("text-base font-bold font-mono", stat.color === "amber" ? "text-amber-600" : "text-foreground")}>
+                    {stat.color === "neutral" ? stat.value : formatCurrency(stat.value)}
+                  </span>
+                )}
               </div>
             </div>
           </CardContent>

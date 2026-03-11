@@ -1,6 +1,7 @@
 "use client"
 
 import { Card, CardContent } from "@/components/ui/card"
+import { Skeleton } from "@/components/ui/skeleton"
 import { DollarSign, ArrowUpRight, Wallet } from "lucide-react"
 import { Income } from "@/lib/types"
 import { useFinance } from "@/lib/finance-context"
@@ -8,6 +9,7 @@ import { cn } from "@/lib/utils"
 
 interface IncomeStatsProps {
   incomes: Income[]
+  loading?: boolean
 }
 
 function formatCurrency(value: number) {
@@ -22,7 +24,7 @@ function formatCurrency(value: number) {
   return formatted;
 }
 
-export function IncomeStats({ incomes }: IncomeStatsProps) {
+export function IncomeStats({ incomes, loading = false }: IncomeStatsProps) {
   const { viewMode, personNames } = useFinance()
 
   const totalIncome = incomes.reduce((a, i) => a + i.amount, 0)
@@ -47,7 +49,11 @@ export function IncomeStats({ incomes }: IncomeStatsProps) {
             <div className="flex items-center justify-between gap-2">
               <div className="flex flex-col gap-1 min-w-0">
                 <span className="text-xs font-medium text-muted-foreground truncate">{stat.label}</span>
-                <span className="text-base sm:text-lg font-bold font-mono text-foreground">{formatCurrency(stat.value)}</span>
+                {loading ? (
+                  <Skeleton className="h-5 w-28" />
+                ) : (
+                  <span className="text-base sm:text-lg font-bold font-mono text-foreground">{formatCurrency(stat.value)}</span>
+                )}
               </div>
               <div className="w-9 h-9 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
                 <stat.icon className="w-4 h-4 text-primary" />

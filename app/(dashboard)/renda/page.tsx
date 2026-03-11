@@ -1,10 +1,6 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { useFinance } from "@/lib/finance-context"
-import { Button } from "@/components/ui/button"
-import { Plus } from "lucide-react"
-import { PageSkeleton } from "@/components/skeleton-loader"
 import { incomeService } from "@/services/financeService"
 import { Income } from "@/lib/types"
 import { IncomeDialog } from "@/components/incomes/IncomeDialog"
@@ -12,7 +8,6 @@ import { IncomeStats } from "@/components/incomes/IncomeStats"
 import { IncomeList } from "@/components/incomes/IncomeList"
 
 export default function RendaPage() {
-  const { isLoaded: contextLoaded } = useFinance()
   const [incomes, setIncomes] = useState<Income[]>([])
   const [loading, setLoading] = useState(true)
 
@@ -43,8 +38,6 @@ export default function RendaPage() {
     await fetchData()
   }
 
-  if (loading && !contextLoaded) return <PageSkeleton />
-
   return (
     <div className="flex flex-col gap-6 p-4 md:p-8 pt-6">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
@@ -57,12 +50,12 @@ export default function RendaPage() {
         </div>
       </div>
 
-      <IncomeStats incomes={incomes} />
+      <IncomeStats incomes={incomes} loading={loading} />
 
-      <IncomeList 
-        incomes={incomes} 
-        loading={loading} 
-        onDelete={handleDeleteIncome} 
+      <IncomeList
+        incomes={incomes}
+        loading={loading}
+        onDelete={handleDeleteIncome}
       />
     </div>
   )

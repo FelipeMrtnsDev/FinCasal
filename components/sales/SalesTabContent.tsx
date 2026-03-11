@@ -172,10 +172,6 @@ export function SalesTabContent() {
     setSelectedSale(null)
   }
 
-  if (loading) {
-    return <TabsContent value="vendas" className="flex flex-col gap-6 mt-4" />
-  }
-
   return (
     <TabsContent value="vendas" className="flex flex-col gap-6 mt-4">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
@@ -195,29 +191,33 @@ export function SalesTabContent() {
         </div>
       </div>
 
-      <SalesStatsCards stats={salesStats} />
+      <SalesStatsCards stats={salesStats} loading={loading} />
 
-      <SalesProductsCard
-        products={saleProducts}
-        onNewProduct={() => { setEditingProduct(null); setProductDialogOpen(true) }}
-        onEditProduct={(product) => { setEditingProduct(product); setProductDialogOpen(true) }}
-        onDeleteProduct={removeSaleProduct}
-      />
+      {!loading && (
+        <SalesProductsCard
+          products={saleProducts}
+          onNewProduct={() => { setEditingProduct(null); setProductDialogOpen(true) }}
+          onEditProduct={(product) => { setEditingProduct(product); setProductDialogOpen(true) }}
+          onDeleteProduct={removeSaleProduct}
+        />
+      )}
 
-      <SalesCharts byCategory={byCategory} byProduct={byProduct} />
+      {!loading && <SalesCharts byCategory={byCategory} byProduct={byProduct} />}
 
-      <SalesCategoryCard byCategory={byCategory} />
+      {!loading && <SalesCategoryCard byCategory={byCategory} />}
 
-      <SalesHistoryCard sales={sales} onSelectSale={setSelectedSale} />
+      {!loading && <SalesHistoryCard sales={sales} onSelectSale={setSelectedSale} />}
 
-      <SaleDialog open={saleDialogOpen} onOpenChange={setSaleDialogOpen} products={saleProducts} onSave={addSale} />
-      <SaleProductDialog
-        open={productDialogOpen}
-        onOpenChange={setProductDialogOpen}
-        editingProduct={editingProduct}
-        onSave={addOrUpdateProduct}
-      />
-      <SaleDetailDialog sale={selectedSale} onClose={() => setSelectedSale(null)} onDelete={removeSale} />
+      {!loading && <SaleDialog open={saleDialogOpen} onOpenChange={setSaleDialogOpen} products={saleProducts} onSave={addSale} />}
+      {!loading && (
+        <SaleProductDialog
+          open={productDialogOpen}
+          onOpenChange={setProductDialogOpen}
+          editingProduct={editingProduct}
+          onSave={addOrUpdateProduct}
+        />
+      )}
+      {!loading && <SaleDetailDialog sale={selectedSale} onClose={() => setSelectedSale(null)} onDelete={removeSale} />}
     </TabsContent>
   )
 }

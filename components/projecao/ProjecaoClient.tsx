@@ -3,8 +3,7 @@
 import { useEffect, useMemo, useState } from "react"
 import { useFinance } from "@/lib/finance-context"
 import { savingsGoalService } from "@/services/financeService"
-import { PageSkeleton } from "@/components/skeleton-loader"
-import { Calendar, PiggyBank, Target, TrendingUp } from "lucide-react"
+import { Calendar, PiggyBank, Target, TrendingUp, Wallet } from "lucide-react"
 import { SavingsGoal } from "@/lib/types"
 import { GoalDialog } from "./GoalDialog"
 import { ProjectionStats } from "./ProjectionStats"
@@ -15,7 +14,6 @@ import { GoalFormState, ProjectionStat } from "./types"
 import { buildProjectionData } from "./utils"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { BudgetTabContent } from "@/components/orcamento/BudgetTabContent"
-import { Wallet } from "lucide-react"
 
 export function ProjecaoClient() {
   const { incomes, expenses, isLoaded } = useFinance()
@@ -131,7 +129,7 @@ export function ProjecaoClient() {
     { label: "Metas Ativas", value: savingsGoals.length, icon: Calendar, isCurrency: false },
   ]
 
-  if (!isLoaded || loadingGoals) return <PageSkeleton />
+  const pageLoading = !isLoaded || loadingGoals
 
   return (
     <div className="flex flex-col gap-6">
@@ -143,13 +141,13 @@ export function ProjecaoClient() {
       </div>
       <Tabs defaultValue="metas" className="w-full">
         <TabsList className="grid grid-cols-2 w-full sm:w-auto sm:inline-grid">
-          <TabsTrigger value="orcamentos" className="gap-2">
-            <Wallet className="w-4 h-4" />
-            Orcamentos
-          </TabsTrigger>
           <TabsTrigger value="metas" className="gap-2">
             <Target className="w-4 h-4" />
             Metas
+          </TabsTrigger>
+          <TabsTrigger value="orcamentos" className="gap-2">
+            <Wallet className="w-4 h-4" />
+            Orcamentos
           </TabsTrigger>
         </TabsList>
 
@@ -166,7 +164,7 @@ export function ProjecaoClient() {
             />
           </div>
 
-          <ProjectionStats stats={stats} estimatedMonthlySavings={estimatedMonthlySavings} />
+          <ProjectionStats stats={stats} estimatedMonthlySavings={estimatedMonthlySavings} loading={pageLoading} />
 
           <ProjectionChartCard projectionData={projectionData} totalTarget={totalTarget} />
 

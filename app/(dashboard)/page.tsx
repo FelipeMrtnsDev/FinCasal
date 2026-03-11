@@ -20,12 +20,22 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { format } from "date-fns"
 import { ptBR } from "date-fns/locale"
 import { Expense, Income } from "@/lib/types"
+import { getMonthOptionsFromStart } from "@/lib/month-options"
 
 export default function DashboardPage() {
-  const { currentMonth, setCurrentMonth, viewMode } = useFinance()
+  const { currentMonth, setCurrentMonth, viewMode, startMonth } = useFinance()
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [summary, setSummary] = useState<DashboardSummary | null>(null)
+  const [summary, setSummary] = useState<DashboardSummary>({
+    totalIncomes: 0,
+    totalExpenses: 0,
+    balance: 0,
+    pixExpenses: 0,
+    cardExpenses: 0,
+    fixedExpenses: 0,
+    variableExpenses: 0,
+    byPerson: { eu: 0, parceiro: 0 },
+  })
   const [evolution, setEvolution] = useState<MonthlyEvolution[]>([])
   const [categories, setCategories] = useState<CategoryData[]>([])
   const [paymentMethods, setPaymentMethods] = useState<PaymentMethodData[]>([])
@@ -34,13 +44,19 @@ export default function DashboardPage() {
   const [recentExpenses, setRecentExpenses] = useState<Expense[]>([])
   const [recentIncomes, setRecentIncomes] = useState<Income[]>([])
 
+  const getPaymentValue = (rows: PaymentMethodData[], match: RegExp): number => {
+    return rows
+      .filter((row) => match.test((row.name || "").toLowerCase()))
+      .reduce((acc, row) => acc + (Number(row.value) || 0), 0)
+  }
+
   useEffect(() => {
     async function fetchData() {
       setLoading(true)
       try {
         const [summaryData, evolutionData, categoriesData, paymentMethodsData, peopleData, dailyData, expensesData, incomesData] = await Promise.all([
           summaryService.getSummary(currentMonth),
-          summaryService.getMonthlyEvolution(),
+          summaryService.getMonthlyEvolution(currentMonth, startMonth),
           summaryService.getByCategory(currentMonth),
           summaryService.getByPaymentMethod(currentMonth),
           summaryService.getByPerson(currentMonth),
@@ -49,7 +65,27 @@ export default function DashboardPage() {
           incomeService.getAll({ month: currentMonth, limit: 5 })
         ])
 
-        setSummary(summaryData)
+        const allMonthExpenses = await expenseService.getAll({ month: currentMonth })
+        const pixFromExpenses = allMonthExpenses
+          .filter((expense) => {
+            const method = String(expense.paymentMethod || "").toLowerCase()
+            return method === "pix"
+          })
+          .reduce((acc, expense) => acc + (Number(expense.amount) || 0), 0)
+        const cardFromExpenses = allMonthExpenses
+          .filter((expense) => {
+            const method = String(expense.paymentMethod || "").toLowerCase()
+            return method.includes("credit") || method.includes("card") || method.includes("cart")
+          })
+          .reduce((acc, expense) => acc + (Number(expense.amount) || 0), 0)
+
+        const pixFallback = getPaymentValue(paymentMethodsData, /pix/)
+        const cardFallback = getPaymentValue(paymentMethodsData, /cart|credit/)
+        setSummary({
+          ...summaryData,
+          pixExpenses: summaryData.pixExpenses > 0 ? summaryData.pixExpenses : Math.max(pixFallback, pixFromExpenses),
+          cardExpenses: summaryData.cardExpenses > 0 ? summaryData.cardExpenses : Math.max(cardFallback, cardFromExpenses),
+        })
         setEvolution(evolutionData)
         setCategories(categoriesData)
         setPaymentMethods(paymentMethodsData)
@@ -59,24 +95,18 @@ export default function DashboardPage() {
         setRecentIncomes(incomesData)
       } catch (error) {
         console.error("Failed to fetch dashboard data", error)
+        setError("Falha ao carregar dados do painel")
       } finally {
         setLoading(false)
       }
     }
 
     fetchData()
-  }, [currentMonth])
-
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center h-[calc(100vh-100px)]">
-        <Loader2 className="w-10 h-10 animate-spin text-primary" />
-      </div>
-    )
-  }
+  }, [currentMonth, startMonth])
 
   const monthDate = new Date(currentMonth + "-01")
   const monthName = format(monthDate, "MMMM 'de' yyyy", { locale: ptBR })
+  const monthOptions = getMonthOptionsFromStart(startMonth)
 
   return (
     <div className="flex flex-col gap-6 p-4 md:p-8 pt-6">
@@ -93,24 +123,17 @@ export default function DashboardPage() {
               <SelectValue placeholder="Selecione o mês" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="2026-01">Janeiro 2026</SelectItem>
-              <SelectItem value="2026-02">Fevereiro 2026</SelectItem>
-              <SelectItem value="2026-03">Março 2026</SelectItem>
-              <SelectItem value="2026-04">Abril 2026</SelectItem>
-              <SelectItem value="2026-05">Maio 2026</SelectItem>
-              <SelectItem value="2026-06">Junho 2026</SelectItem>
-              <SelectItem value="2026-07">Julho 2026</SelectItem>
-              <SelectItem value="2026-08">Agosto 2026</SelectItem>
-              <SelectItem value="2026-09">Setembro 2026</SelectItem>
-              <SelectItem value="2026-10">Outubro 2026</SelectItem>
-              <SelectItem value="2026-11">Novembro 2026</SelectItem>
-              <SelectItem value="2026-12">Dezembro 2026</SelectItem>
+              {monthOptions.map((m) => (
+                <SelectItem key={m.value} value={m.value} className="capitalize">
+                  {m.label}
+                </SelectItem>
+              ))}
             </SelectContent>
           </Select>
         </div>
       </div>
 
-      {summary && <StatsCards summary={summary} />}
+      <StatsCards summary={summary} loading={loading} />
 
       <Card>
         <Tabs defaultValue="evolucao" className="w-full">
