@@ -7,6 +7,96 @@ import {
   SavingsGoal,
 } from "@/lib/types";
 
+export interface BudgetDTO {
+  id: string;
+  categoryId: string;
+  categoryName: string;
+  limitAmount: number;
+  month: string;
+}
+
+export interface BudgetStatusDTO {
+  budgetId: string;
+  categoryId: string;
+  categoryName: string;
+  limitAmount: number;
+  spentAmount: number;
+  percentage: number;
+  status: string;
+}
+
+export interface CreateBudgetPayload {
+  categoryId: string;
+  categoryName: string;
+  limitAmount: number;
+  month: string;
+}
+
+export interface UpdateBudgetPayload {
+  limitAmount: number;
+}
+
+export interface SaleProductDTO {
+  id: string;
+  name: string;
+  category: string;
+  costPrice: number;
+  salePrice: number;
+}
+
+export interface CreateSaleProductPayload {
+  name: string;
+  category: string;
+  costPrice: number;
+  salePrice: number;
+}
+
+export interface UpdateSaleProductPayload {
+  name?: string;
+  category?: string;
+  costPrice?: number;
+  salePrice?: number;
+}
+
+export interface SaleDTO {
+  id: string;
+  productId: string;
+  quantity: number;
+  date: string;
+  personId?: string;
+  productName?: string;
+  category?: string;
+  unitPrice?: number;
+  unitCost?: number;
+}
+
+export interface CreateSalePayload {
+  productId: string;
+  quantity: number;
+  date: string;
+  personId: string;
+}
+
+export interface SalesSummaryDTO {
+  totalRevenue: number;
+  totalCost: number;
+  totalProfit: number;
+  totalUnits: number;
+}
+
+export interface SalesByCategoryDTO {
+  category: string;
+  revenue: number;
+  profit: number;
+}
+
+export interface SalesByProductDTO {
+  productId: string;
+  name: string;
+  revenue: number;
+  profitPerUnit: number;
+}
+
 export const expenseService = {
   getAll: async (params?: any): Promise<Expense[]> => {
     // Remove limit se o backend não suportar ou se estiver dando erro 400
@@ -138,6 +228,92 @@ export const dashboardService = {
   },
   update: async (data: any): Promise<any> => {
     const response = await api.patch("/dashboard", data);
+    return response.data;
+  },
+};
+
+export const budgetService = {
+  getAll: async (month?: string): Promise<BudgetDTO[]> => {
+    const response = await api.get<BudgetDTO[]>("/budgets", {
+      params: month ? { month } : undefined,
+    });
+    return response.data;
+  },
+  create: async (data: CreateBudgetPayload): Promise<BudgetDTO> => {
+    const response = await api.post<BudgetDTO>("/budgets", data);
+    return response.data;
+  },
+  update: async (id: string, data: UpdateBudgetPayload): Promise<BudgetDTO> => {
+    const response = await api.patch<BudgetDTO>(`/budgets/${id}`, data);
+    return response.data;
+  },
+  delete: async (id: string): Promise<void> => {
+    await api.delete(`/budgets/${id}`);
+  },
+  getStatus: async (month: string): Promise<BudgetStatusDTO[]> => {
+    const response = await api.get<BudgetStatusDTO[]>("/budgets/status", {
+      params: { month },
+    });
+    return response.data;
+  },
+};
+
+export const saleProductService = {
+  getAll: async (): Promise<SaleProductDTO[]> => {
+    const response = await api.get<SaleProductDTO[]>("/sale-products");
+    return response.data;
+  },
+  create: async (data: CreateSaleProductPayload): Promise<SaleProductDTO> => {
+    const response = await api.post<SaleProductDTO>("/sale-products", data);
+    return response.data;
+  },
+  update: async (
+    id: string,
+    data: UpdateSaleProductPayload,
+  ): Promise<SaleProductDTO> => {
+    const response = await api.patch<SaleProductDTO>(
+      `/sale-products/${id}`,
+      data,
+    );
+    return response.data;
+  },
+  delete: async (id: string): Promise<void> => {
+    await api.delete(`/sale-products/${id}`);
+  },
+};
+
+export const salesService = {
+  getAll: async (params?: {
+    month?: string;
+    productId?: string;
+    category?: string;
+  }): Promise<SaleDTO[]> => {
+    const response = await api.get<SaleDTO[]>("/sales", { params });
+    return response.data;
+  },
+  create: async (data: CreateSalePayload): Promise<SaleDTO> => {
+    const response = await api.post<SaleDTO>("/sales", data);
+    return response.data;
+  },
+  delete: async (id: string): Promise<void> => {
+    await api.delete(`/sales/${id}`);
+  },
+  getSummary: async (month?: string): Promise<SalesSummaryDTO> => {
+    const response = await api.get<SalesSummaryDTO>("/sales/summary", {
+      params: month ? { month } : undefined,
+    });
+    return response.data;
+  },
+  getByCategory: async (month?: string): Promise<SalesByCategoryDTO[]> => {
+    const response = await api.get<SalesByCategoryDTO[]>("/sales/by-category", {
+      params: month ? { month } : undefined,
+    });
+    return response.data;
+  },
+  getByProduct: async (month?: string): Promise<SalesByProductDTO[]> => {
+    const response = await api.get<SalesByProductDTO[]>("/sales/by-product", {
+      params: month ? { month } : undefined,
+    });
     return response.data;
   },
 };
