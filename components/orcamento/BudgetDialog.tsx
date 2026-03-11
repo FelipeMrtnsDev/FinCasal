@@ -12,11 +12,12 @@ type BudgetDialogProps = {
   open: boolean
   onOpenChange: (open: boolean) => void
   categories: Category[]
+  saving?: boolean
   categoryId: string
   limitAmount: string
   onChangeCategoryId: (value: string) => void
   onChangeLimitAmount: (value: string) => void
-  onSave: () => void
+  onSave: () => Promise<void>
   onCancel: () => void
 }
 
@@ -24,6 +25,7 @@ export function BudgetDialog({
   open,
   onOpenChange,
   categories,
+  saving = false,
   categoryId,
   limitAmount,
   onChangeCategoryId,
@@ -71,13 +73,13 @@ export function BudgetDialog({
           </div>
         </div>
         <DialogFooter>
-          <Button variant="outline" onClick={onCancel}>Cancelar</Button>
+          <Button variant="outline" onClick={onCancel} disabled={saving}>Cancelar</Button>
           <Button
             onClick={onSave}
             className="bg-primary text-primary-foreground hover:bg-primary/90"
-            disabled={!categoryId || !limitAmount}
+            disabled={saving || !categoryId || !limitAmount}
           >
-            Salvar
+            {saving ? "Salvando..." : "Salvar"}
           </Button>
         </DialogFooter>
       </DialogContent>

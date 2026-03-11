@@ -3,10 +3,10 @@
 import { useCallback, useEffect, useMemo, useState } from "react"
 import { format } from "date-fns"
 import { AlertTriangle } from "lucide-react"
-import { useFinance } from "@/lib/finance-context"
 import { TabsContent } from "@/components/ui/tabs"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { budgetService } from "@/services/financeService"
+import { budgetService, categoryService } from "@/services/financeService"
+import { Category } from "@/lib/types"
 import { BudgetDialog } from "./BudgetDialog"
 import { BudgetListCard } from "./BudgetListCard"
 import { BudgetSummaryStats } from "./BudgetSummaryStats"
@@ -14,15 +14,37 @@ import { Budget } from "./types"
 import { getBudgetStatus, getMonthOptions } from "./utils"
 
 export function BudgetTabContent() {
-  const { categories } = useFinance()
+  const [categories, setCategories] = useState<Category[]>([])
+  const [loadingCategories, setLoadingCategories] = useState(true)
   const [monthBudgets, setMonthBudgets] = useState<Budget[]>([])
   const [budgetStatus, setBudgetStatus] = useState<ReturnType<typeof getBudgetStatus>>([])
   const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState(false)
   const [selectedMonth, setSelectedMonth] = useState(format(new Date(), "yyyy-MM"))
   const [budgetDialogOpen, setBudgetDialogOpen] = useState(false)
   const [budgetForm, setBudgetForm] = useState({ categoryId: "", limitAmount: "" })
 
   const monthOptions = useMemo(() => getMonthOptions(), [])
+
+  useEffect(() => {
+    const loadCategories = async () => {
+      setLoadingCategories(true)
+      try {
+        const data = await categoryService.getAll()
+        const normalized = (data || []).map((c) => ({
+          ...c,
+          color: c.color || "#21C25E",
+        }))
+        setCategories(normalized)
+      } catch (error) {
+        console.error("Erro ao carregar categorias:", error)
+        setCategories([])
+      } finally {
+        setLoadingCategories(false)
+      }
+    }
+    loadCategories()
+  }, [])
 
   const loadMonthData = useCallback(async (month: string) => {
     setLoading(true)
@@ -60,23 +82,29 @@ export function BudgetTabContent() {
   const resetBudgetForm = () => setBudgetForm({ categoryId: "", limitAmount: "" })
 
   const handleAddBudget = async () => {
+    if (saving) return
     const selectedCategory = categories.find((c) => c.id === budgetForm.categoryId)
     if (!selectedCategory || !budgetForm.limitAmount) return
-    const limitAmount = Number(budgetForm.limitAmount)
-    const existing = monthBudgets.find((b) => b.categoryId === budgetForm.categoryId)
-    if (existing) {
-      await budgetService.update(existing.id, { limitAmount })
-    } else {
-      await budgetService.create({
-        categoryId: selectedCategory.id,
-        categoryName: selectedCategory.name,
-        limitAmount,
-        month: selectedMonth,
-      })
+    setSaving(true)
+    try {
+      const limitAmount = Number(budgetForm.limitAmount)
+      const existing = monthBudgets.find((b) => b.categoryId === budgetForm.categoryId)
+      if (existing) {
+        await budgetService.update(existing.id, { limitAmount })
+      } else {
+        await budgetService.create({
+          categoryId: selectedCategory.id,
+          categoryName: selectedCategory.name,
+          limitAmount,
+          month: selectedMonth,
+        })
+      }
+      await loadMonthData(selectedMonth)
+      resetBudgetForm()
+      setBudgetDialogOpen(false)
+    } finally {
+      setSaving(false)
     }
-    await loadMonthData(selectedMonth)
-    resetBudgetForm()
-    setBudgetDialogOpen(false)
   }
 
   const removeBudget = async (id: string) => {
@@ -102,6 +130,7 @@ export function BudgetTabContent() {
           open={budgetDialogOpen}
           onOpenChange={setBudgetDialogOpen}
           categories={categories}
+          saving={saving || loadingCategories}
           categoryId={budgetForm.categoryId}
           limitAmount={budgetForm.limitAmount}
           onChangeCategoryId={(v) => setBudgetForm({ ...budgetForm, categoryId: v })}
