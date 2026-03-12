@@ -1,9 +1,8 @@
 "use client"
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Cell, Pie, PieChart, ResponsiveContainer, Tooltip, RadialBarChart, RadialBar } from "recharts"
+import { Cell, Pie, PieChart, ResponsiveContainer, Tooltip } from "recharts"
 import { PaymentMethodData, DashboardSummary } from "@/services/summaryService"
-import { motion } from "framer-motion"
 
 interface PaymentMethodChartProps {
   data: PaymentMethodData[]
@@ -35,10 +34,8 @@ export function PaymentMethodChart({ data, summary }: PaymentMethodChartProps) {
   const chartData = data.length > 0 ? data : [{ name: "Sem dados", value: 1, color: "#374151" }]
   const hasData = data.length > 0
 
-  // Dados para o gráfico radial (fixos vs variáveis)
-  // Se ambos forem 0, cria dados fictícios para mostrar gráfico vazio cinza
   const hasSummaryData = summary.fixedExpenses > 0 || summary.variableExpenses > 0
-  const fixedVarRadial = hasSummaryData ? [
+  const fixedVarPie = hasSummaryData ? [
     { name: "Variaveis", value: summary.variableExpenses, fill: "#4ade80" },
     { name: "Fixos", value: summary.fixedExpenses, fill: "#21C25E" },
   ] : [
@@ -83,50 +80,28 @@ export function PaymentMethodChart({ data, summary }: PaymentMethodChartProps) {
         <div className="flex flex-col sm:flex-row items-center gap-6">
           <div className="h-48 w-48 shrink-0">
             <ResponsiveContainer width="100%" height="100%">
-              <RadialBarChart innerRadius="40%" outerRadius="100%" data={fixedVarRadial} startAngle={180} endAngle={0} cx="50%" cy="80%">
-                <RadialBar dataKey="value" cornerRadius={6} animationDuration={800} />
+              <PieChart>
+                <Pie data={fixedVarPie} cx="50%" cy="50%" outerRadius={75} paddingAngle={2} dataKey="value" animationBegin={0} animationDuration={800}>
+                  {fixedVarPie.map((entry, index) => (
+                    <Cell key={`cell-fv-${index}`} fill={entry.fill} />
+                  ))}
+                </Pie>
                 {hasSummaryData && <Tooltip content={<CustomTooltipContent />} />}
-              </RadialBarChart>
+              </PieChart>
             </ResponsiveContainer>
           </div>
-          <div className="flex flex-col gap-4 flex-1">
-            <div className="flex flex-col gap-2">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <div className="w-3 h-3 rounded-full bg-primary" />
-                  <span className="text-sm text-foreground">Custos Fixos</span>
+          <div className="flex flex-col gap-2 flex-1 min-w-0 w-full">
+            {hasSummaryData ? (
+              fixedVarPie.map((row) => (
+                <div key={row.name} className="flex items-center gap-2">
+                  <div className="w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: row.fill }} />
+                  <span className="text-sm text-foreground flex-1">{row.name}</span>
+                  <span className="text-sm font-mono text-foreground shrink-0">{formatCurrency(row.value)}</span>
                 </div>
-                <span className="text-sm font-mono font-medium text-foreground">{formatCurrency(summary.fixedExpenses)}</span>
-              </div>
-              <div className="h-2.5 rounded-full bg-muted overflow-hidden">
-                <motion.div
-                  initial={{ width: 0 }}
-                  animate={{ width: summary.totalExpenses > 0 ? `${(summary.fixedExpenses / summary.totalExpenses) * 100}%` : "0%" }}
-                  transition={{ duration: 0.8, ease: "easeOut" }}
-                  className="h-full rounded-full bg-primary"
-                />
-              </div>
-              <span className="text-xs text-muted-foreground">{summary.totalExpenses > 0 ? ((summary.fixedExpenses / summary.totalExpenses) * 100).toFixed(1) : "0"}% do total</span>
-            </div>
-            <div className="flex flex-col gap-2">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <div className="w-3 h-3 rounded-full" style={{ backgroundColor: "#4ade80" }} />
-                  <span className="text-sm text-foreground">Custos Variaveis</span>
-                </div>
-                <span className="text-sm font-mono font-medium text-foreground">{formatCurrency(summary.variableExpenses)}</span>
-              </div>
-              <div className="h-2.5 rounded-full bg-muted overflow-hidden">
-                <motion.div
-                  initial={{ width: 0 }}
-                  animate={{ width: summary.totalExpenses > 0 ? `${(summary.variableExpenses / summary.totalExpenses) * 100}%` : "0%" }}
-                  transition={{ duration: 0.8, ease: "easeOut", delay: 0.2 }}
-                  className="h-full rounded-full"
-                  style={{ backgroundColor: "#4ade80" }}
-                />
-              </div>
-              <span className="text-xs text-muted-foreground">{summary.totalExpenses > 0 ? ((summary.variableExpenses / summary.totalExpenses) * 100).toFixed(1) : "0"}% do total</span>
-            </div>
+              ))
+            ) : (
+              <div className="text-sm text-muted-foreground text-center py-4">Nenhuma despesa registrada</div>
+            )}
           </div>
         </div>
       </div>

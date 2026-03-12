@@ -3,7 +3,7 @@
 import { useState } from "react"
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { Trash2, HelpCircle, CreditCard, Smartphone, Banknote, ArrowLeftRight } from "lucide-react"
+import { Trash2, HelpCircle, CreditCard, Smartphone, Banknote, ArrowLeftRight, Loader2 } from "lucide-react"
 import { Expense, Category, PaymentMethod } from "@/lib/types"
 import { useFinance } from "@/lib/finance-context"
 import { format, parseISO } from "date-fns"
@@ -62,10 +62,21 @@ export function ExpenseList({ expenses, categories, loading = false, onDelete }:
   const { viewMode, personNames } = useFinance()
   const [selectedExpense, setSelectedExpense] = useState<Expense | null>(null)
   const [detailsOpen, setDetailsOpen] = useState(false)
+  const [deletingId, setDeletingId] = useState<string | null>(null)
 
   const handleExpenseClick = (expense: Expense) => {
     setSelectedExpense(expense)
     setDetailsOpen(true)
+  }
+
+  const handleDeleteExpense = async (id: string) => {
+    if (deletingId) return
+    setDeletingId(id)
+    try {
+      await onDelete(id)
+    } finally {
+      setDeletingId(null)
+    }
   }
 
   const translateType = (type: string) => {
@@ -189,10 +200,15 @@ export function ExpenseList({ expenses, categories, loading = false, onDelete }:
                         className="opacity-0 group-hover:opacity-100 transition-opacity h-8 w-8 text-muted-foreground hover:text-destructive"
                         onClick={(e) => {
                           e.stopPropagation();
-                          onDelete(expense.id);
+                          handleDeleteExpense(expense.id);
                         }}
+                        disabled={deletingId === expense.id}
                       >
-                        <Trash2 className="w-4 h-4" />
+                        {deletingId === expense.id ? (
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                        ) : (
+                          <Trash2 className="w-4 h-4" />
+                        )}
                       </Button>
                     </div>
                   </div>

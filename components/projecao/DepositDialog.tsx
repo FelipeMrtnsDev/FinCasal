@@ -11,6 +11,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
+import { Loader2 } from "lucide-react"
 
 type DepositDialogProps = {
   open: boolean
@@ -18,6 +19,7 @@ type DepositDialogProps = {
   depositAmount: string
   onDepositAmountChange: (value: string) => void
   onDeposit: () => Promise<void>
+  saving?: boolean
 }
 
 export function DepositDialog({
@@ -26,6 +28,7 @@ export function DepositDialog({
   depositAmount,
   onDepositAmountChange,
   onDeposit,
+  saving = false,
 }: DepositDialogProps) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -48,15 +51,15 @@ export function DepositDialog({
           </div>
         </div>
         <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>
+          <Button variant="outline" onClick={() => onOpenChange(false)} disabled={saving}>
             Cancelar
           </Button>
           <Button
             onClick={onDeposit}
             className="bg-primary text-primary-foreground hover:bg-primary/90"
-            disabled={!depositAmount}
+            disabled={!depositAmount || saving}
           >
-            Depositar
+            {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : "Depositar"}
           </Button>
         </DialogFooter>
       </DialogContent>

@@ -1,9 +1,10 @@
 "use client"
 
 import { format, parseISO } from "date-fns"
+import { useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogClose, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
-import { Calendar, FileText, ShoppingBag, Trash2 } from "lucide-react"
+import { Calendar, FileText, ShoppingBag, Trash2, Loader2 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { Sale } from "./types"
 import { formatCurrency } from "./utils"
@@ -11,10 +12,23 @@ import { formatCurrency } from "./utils"
 type SaleDetailDialogProps = {
   sale: Sale | null
   onClose: () => void
-  onDelete: (id: string) => void
+  onDelete: (id: string) => Promise<void>
 }
 
 export function SaleDetailDialog({ sale, onClose, onDelete }: SaleDetailDialogProps) {
+  const [deleting, setDeleting] = useState(false)
+
+  const handleDelete = async () => {
+    if (!sale || deleting) return
+    setDeleting(true)
+    try {
+      await onDelete(sale.id)
+      onClose()
+    } finally {
+      setDeleting(false)
+    }
+  }
+
   return (
     <Dialog open={!!sale} onOpenChange={(open) => !open && onClose()}>
       <DialogContent className="max-w-sm">
@@ -60,18 +74,16 @@ export function SaleDetailDialog({ sale, onClose, onDelete }: SaleDetailDialogPr
             </div>
             <DialogFooter className="flex-row gap-2">
               <DialogClose asChild>
-                <Button variant="outline" className="flex-1">Fechar</Button>
+                <Button variant="outline" className="flex-1" disabled={deleting}>Fechar</Button>
               </DialogClose>
               <Button
                 variant="destructive"
                 className="flex-1 gap-2"
-                onClick={() => {
-                  onDelete(sale.id)
-                  onClose()
-                }}
+                onClick={handleDelete}
+                disabled={deleting}
               >
-                <Trash2 className="w-4 h-4" />
-                Excluir
+                {deleting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
+                {deleting ? "Excluindo..." : "Excluir"}
               </Button>
             </DialogFooter>
           </>

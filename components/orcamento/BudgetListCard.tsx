@@ -48,8 +48,6 @@ export function BudgetListCard({ selectedMonth, categories, budgetStatus, remove
                   <div className="flex items-center gap-2 min-w-0">
                     <div className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: cat?.color ?? "#21C25E" }} />
                     <span className="text-sm font-medium text-foreground truncate">{b.categoryName}</span>
-                    {b.isOver && <span className="text-[10px] font-bold text-destructive bg-destructive/10 px-1.5 py-0.5 rounded shrink-0">ESTOUROU</span>}
-                    {b.isNear && !b.isOver && <span className="text-[10px] font-bold text-amber-600 bg-amber-50 px-1.5 py-0.5 rounded shrink-0">PERTO</span>}
                   </div>
                   <div className="flex items-center gap-2 shrink-0">
                     <span className={cn("text-xs font-mono font-semibold", b.isOver ? "text-destructive" : "text-foreground")}>{formatCurrency(b.spent)}</span>

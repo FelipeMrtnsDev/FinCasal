@@ -12,7 +12,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog"
-import { Plus } from "lucide-react"
+import { Plus, Loader2 } from "lucide-react"
 import { GoalFormState } from "./types"
 
 type GoalDialogProps = {
@@ -21,6 +21,7 @@ type GoalDialogProps = {
   goalForm: GoalFormState
   onGoalFormChange: (form: GoalFormState) => void
   onCreate: () => Promise<void>
+  saving?: boolean
 }
 
 export function GoalDialog({
@@ -29,11 +30,12 @@ export function GoalDialog({
   goalForm,
   onGoalFormChange,
   onCreate,
+  saving = false,
 }: GoalDialogProps) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogTrigger asChild>
-        <Button size="sm" className="gap-2 bg-primary text-primary-foreground hover:bg-primary/90">
+        <Button size="sm" className="gap-2 bg-primary text-primary-foreground hover:bg-primary/90" disabled={saving}>
           <Plus className="w-4 h-4" />
           Nova Meta
         </Button>
@@ -86,15 +88,15 @@ export function GoalDialog({
           </div>
         </div>
         <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>
+          <Button variant="outline" onClick={() => onOpenChange(false)} disabled={saving}>
             Cancelar
           </Button>
           <Button
             onClick={onCreate}
             className="bg-primary text-primary-foreground hover:bg-primary/90"
-            disabled={!goalForm.name || !goalForm.targetAmount}
+            disabled={!goalForm.name || !goalForm.targetAmount || saving}
           >
-            Criar Meta
+            {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : "Criar Meta"}
           </Button>
         </DialogFooter>
       </DialogContent>

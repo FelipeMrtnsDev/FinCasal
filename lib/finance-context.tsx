@@ -5,6 +5,11 @@ import type { FinanceState, Expense, Income, Investment, SavingsGoal, Category, 
 import { DEFAULT_CATEGORIES } from "@/lib/types"
 
 const STORAGE_KEY = "finance-app-data"
+const getLocalYearMonth = () => {
+  const now = new Date()
+  const month = String(now.getMonth() + 1).padStart(2, "0")
+  return `${now.getFullYear()}-${month}`
+}
 
 const defaultState: FinanceState = {
   expenses: [],
@@ -14,8 +19,8 @@ const defaultState: FinanceState = {
   savingsGoals: [],
   viewMode: "casal",
   personNames: { eu: "Eu", parceiro: "Parceiro(a)" },
-  currentMonth: new Date().toISOString().slice(0, 7),
-  startMonth: new Date().toISOString().slice(0, 7),
+  currentMonth: getLocalYearMonth(),
+  startMonth: getLocalYearMonth(),
 }
 
 interface FinanceContextType extends FinanceState {

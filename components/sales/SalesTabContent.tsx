@@ -161,7 +161,6 @@ export function SalesTabContent() {
       productId: payload.productId,
       quantity: payload.quantity,
       date: payload.date,
-      personId: "eu",
     })
     await loadData()
   }

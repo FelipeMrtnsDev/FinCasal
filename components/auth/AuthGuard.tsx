@@ -17,7 +17,12 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
       return
     }
 
-    const token = localStorage.getItem('token')
+    const token =
+      localStorage.getItem('token') ||
+      document.cookie
+        .split('; ')
+        .find((cookie) => cookie.startsWith('auth_token='))
+        ?.split('=')[1]
     if (!token) {
       router.push('/login')
     } else {

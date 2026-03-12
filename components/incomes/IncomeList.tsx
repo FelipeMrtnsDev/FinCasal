@@ -2,11 +2,12 @@
 
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { Trash2, ArrowUpRight } from "lucide-react"
+import { Trash2, ArrowUpRight, Loader2 } from "lucide-react"
 import { Income } from "@/lib/types"
 import { useFinance } from "@/lib/finance-context"
 import { format, parseISO } from "date-fns"
 import { Skeleton } from "@/components/ui/skeleton"
+import { useState } from "react"
 
 interface IncomeListProps {
   incomes: Income[]
@@ -27,6 +28,17 @@ function formatCurrency(value: number) {
 
 export function IncomeList({ incomes, loading = false, onDelete }: IncomeListProps) {
   const { personNames } = useFinance()
+  const [deletingId, setDeletingId] = useState<string | null>(null)
+
+  const handleDeleteIncome = async (id: string) => {
+    if (deletingId) return
+    setDeletingId(id)
+    try {
+      await onDelete(id)
+    } finally {
+      setDeletingId(null)
+    }
+  }
 
   if (loading) {
     return (
@@ -100,9 +112,14 @@ export function IncomeList({ incomes, loading = false, onDelete }: IncomeListPro
                       variant="ghost"
                       size="icon"
                       className="opacity-0 group-hover:opacity-100 transition-opacity h-8 w-8 text-muted-foreground hover:text-destructive"
-                      onClick={() => onDelete(income.id)}
+                      onClick={() => handleDeleteIncome(income.id)}
+                      disabled={deletingId === income.id}
                     >
-                      <Trash2 className="w-4 h-4" />
+                      {deletingId === income.id ? (
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                      ) : (
+                        <Trash2 className="w-4 h-4" />
+                      )}
                     </Button>
                   </div>
                 </div>

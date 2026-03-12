@@ -9,9 +9,23 @@ const api = axios.create({
 
 api.interceptors.request.use(
   (config) => {
-    const token = localStorage.getItem("token");
+    const tokenFromStorage =
+      typeof window !== "undefined" ? localStorage.getItem("token") : null;
+    const tokenFromCookie =
+      typeof document !== "undefined"
+        ? document.cookie
+            .split("; ")
+            .find((cookie) => cookie.startsWith("auth_token="))
+            ?.split("=")[1]
+        : null;
+    const token =
+      tokenFromStorage ||
+      (tokenFromCookie ? decodeURIComponent(tokenFromCookie) : null);
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
+      if (!tokenFromStorage && typeof window !== "undefined") {
+        localStorage.setItem("token", token);
+      }
     }
     return config;
   },

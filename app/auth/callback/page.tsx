@@ -4,6 +4,8 @@ import { useEffect, Suspense } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 import { Loader2 } from "lucide-react"
 
+const AUTH_COOKIE = "auth_token"
+
 function CallbackContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
@@ -12,6 +14,7 @@ function CallbackContent() {
     const token = searchParams.get("token")
     if (token) {
       localStorage.setItem("token", token)
+      document.cookie = `${AUTH_COOKIE}=${encodeURIComponent(token)}; path=/; max-age=2592000; samesite=lax`
       router.push("/")
     } else {
       router.push("/login")

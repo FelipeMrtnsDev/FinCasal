@@ -1,4 +1,5 @@
 import api from "@/lib/api";
+import { AxiosError } from "axios";
 import {
   Expense,
   Income,
@@ -74,7 +75,7 @@ export interface CreateSalePayload {
   productId: string;
   quantity: number;
   date: string;
-  personId: string;
+  personId?: string;
 }
 
 export interface SalesSummaryDTO {
@@ -97,25 +98,67 @@ export interface SalesByProductDTO {
   profitPerUnit: number;
 }
 
+const isBadRequest = (error: unknown): boolean =>
+  error instanceof AxiosError
+    ? error.response?.status === 400
+    : typeof error === "object" &&
+      error !== null &&
+      "response" in error &&
+      (error as { response?: { status?: number } }).response?.status === 400;
+
+const getErrorMessage = (error: unknown): string => {
+  if (error instanceof AxiosError) {
+    const data = error.response?.data as
+      | { message?: string }
+      | string
+      | undefined;
+    if (typeof data === "string") return data;
+    if (data && typeof data === "object" && typeof data.message === "string")
+      return data.message;
+    return error.message;
+  }
+  return String(error);
+};
+
+const isDashboardRequiredError = (error: unknown): boolean => {
+  if (!isBadRequest(error)) return false;
+  return getErrorMessage(error).toLowerCase().includes("dashboard");
+};
+
+let dashboardCheckCache: { checkedAt: number; hasDashboard: boolean } | null =
+  null;
+
+const hasDashboardMembership = async (): Promise<boolean> => {
+  const now = Date.now();
+  if (dashboardCheckCache && now - dashboardCheckCache.checkedAt < 15000) {
+    return dashboardCheckCache.hasDashboard;
+  }
+  try {
+    await api.get("/dashboard");
+    dashboardCheckCache = { checkedAt: now, hasDashboard: true };
+    return true;
+  } catch (error) {
+    if (isDashboardRequiredError(error)) {
+      dashboardCheckCache = { checkedAt: now, hasDashboard: false };
+      return false;
+    }
+    dashboardCheckCache = { checkedAt: now, hasDashboard: true };
+    return true;
+  }
+};
+
 export const expenseService = {
   getAll: async (params?: any): Promise<Expense[]> => {
-    // Remove limit se o backend não suportar ou se estiver dando erro 400
-    // O backend parece ser Node/Express. Se estiver usando mongoose-paginate ou similar, limit deve funcionar.
-    // Mas se o erro é 400, pode ser validação.
-    // Vamos assumir que o backend não espera 'limit' na query string ou espera outro formato.
-    // Se o backend for simples (find()), ele ignora params extras, não dá 400.
-    // 400 geralmente é validação (zod/joi/class-validator) falhando.
-    // Se o DTO de filtro não permite 'limit', dá erro.
-
-    // Vou tentar remover 'limit' por enquanto para ver se funciona a listagem básica.
-    // Ou melhor, vou passar apenas os params de filtro (month, etc) se existirem.
-
+    if (!(await hasDashboardMembership())) return [];
     const { limit, ...rest } = params || {};
-    // Se o backend suportar paginação, deve ser ?page=1&limit=5 ou similar.
+    let response;
+    try {
+      response = await api.get<Expense[]>("/expenses", { params: rest });
+    } catch (error) {
+      if (!isBadRequest(error)) throw error;
+      response = await api.get<Expense[]>("/expenses");
+    }
 
-    const response = await api.get<Expense[]>("/expenses", { params: rest });
-
-    // Se precisarmos limitar no frontend:
     if (limit && Array.isArray(response.data)) {
       return response.data.slice(0, limit);
     }
@@ -139,8 +182,15 @@ export const expenseService = {
 
 export const incomeService = {
   getAll: async (params?: any): Promise<Income[]> => {
+    if (!(await hasDashboardMembership())) return [];
     const { limit, ...rest } = params || {};
-    const response = await api.get<Income[]>("/incomes", { params: rest });
+    let response;
+    try {
+      response = await api.get<Income[]>("/incomes", { params: rest });
+    } catch (error) {
+      if (!isBadRequest(error)) throw error;
+      response = await api.get<Income[]>("/incomes");
+    }
 
     if (limit && Array.isArray(response.data)) {
       return response.data.slice(0, limit);
@@ -161,6 +211,7 @@ export const incomeService = {
 
 export const investmentService = {
   getAll: async (params?: any): Promise<Investment[]> => {
+    if (!(await hasDashboardMembership())) return [];
     const response = await api.get<Investment[]>("/investments", { params });
     return response.data;
   },
@@ -172,6 +223,8 @@ export const investmentService = {
     await api.delete(`/investments/${id}`);
   },
   getSummary: async (): Promise<any> => {
+    if (!(await hasDashboardMembership()))
+      return { totalInvested: 0, totalReturns: 0 };
     const response = await api.get("/investments/summary");
     return response.data;
   },
@@ -179,6 +232,7 @@ export const investmentService = {
 
 export const categoryService = {
   getAll: async (): Promise<Category[]> => {
+    if (!(await hasDashboardMembership())) return [];
     const response = await api.get<Category[]>("/categories");
     return response.data;
   },
@@ -200,6 +254,7 @@ export const categoryService = {
 
 export const savingsGoalService = {
   getAll: async (): Promise<SavingsGoal[]> => {
+    if (!(await hasDashboardMembership())) return [];
     const response = await api.get<SavingsGoal[]>("/savings-goals");
     return response.data;
   },
@@ -237,6 +292,7 @@ export const dashboardService = {
 
 export const budgetService = {
   getAll: async (month?: string): Promise<BudgetDTO[]> => {
+    if (!(await hasDashboardMembership())) return [];
     const response = await api.get<BudgetDTO[]>("/budgets", {
       params: month ? { month } : undefined,
     });
@@ -254,6 +310,7 @@ export const budgetService = {
     await api.delete(`/budgets/${id}`);
   },
   getStatus: async (month: string): Promise<BudgetStatusDTO[]> => {
+    if (!(await hasDashboardMembership())) return [];
     const response = await api.get<BudgetStatusDTO[]>("/budgets/status", {
       params: { month },
     });
@@ -291,6 +348,7 @@ export const salesService = {
     productId?: string;
     category?: string;
   }): Promise<SaleDTO[]> => {
+    if (!(await hasDashboardMembership())) return [];
     const response = await api.get<SaleDTO[]>("/sales", { params });
     return response.data;
   },
@@ -302,18 +360,23 @@ export const salesService = {
     await api.delete(`/sales/${id}`);
   },
   getSummary: async (month?: string): Promise<SalesSummaryDTO> => {
+    if (!(await hasDashboardMembership())) {
+      return { totalRevenue: 0, totalCost: 0, totalProfit: 0, totalUnits: 0 };
+    }
     const response = await api.get<SalesSummaryDTO>("/sales/summary", {
       params: month ? { month } : undefined,
     });
     return response.data;
   },
   getByCategory: async (month?: string): Promise<SalesByCategoryDTO[]> => {
+    if (!(await hasDashboardMembership())) return [];
     const response = await api.get<SalesByCategoryDTO[]>("/sales/by-category", {
       params: month ? { month } : undefined,
     });
     return response.data;
   },
   getByProduct: async (month?: string): Promise<SalesByProductDTO[]> => {
+    if (!(await hasDashboardMembership())) return [];
     const response = await api.get<SalesByProductDTO[]>("/sales/by-product", {
       params: month ? { month } : undefined,
     });

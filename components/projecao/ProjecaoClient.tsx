@@ -23,6 +23,9 @@ export function ProjecaoClient() {
   const [depositDialogOpen, setDepositDialogOpen] = useState(false)
   const [selectedGoalId, setSelectedGoalId] = useState<string | null>(null)
   const [depositAmount, setDepositAmount] = useState("")
+  const [savingGoal, setSavingGoal] = useState(false)
+  const [depositing, setDepositing] = useState(false)
+  const [deletingGoalId, setDeletingGoalId] = useState<string | null>(null)
   const [goalForm, setGoalForm] = useState<GoalFormState>({
     name: "",
     targetAmount: "",
@@ -57,37 +60,53 @@ export function ProjecaoClient() {
   }
 
   const handleAddGoal = async () => {
-    if (!goalForm.name || !goalForm.targetAmount) return
+    if (!goalForm.name || !goalForm.targetAmount || savingGoal) return
     const deadline = goalForm.deadline
       ? new Date(`${goalForm.deadline}T00:00:00.000Z`).toISOString()
       : undefined
-    await savingsGoalService.create({
-      name: goalForm.name,
-      targetAmount: parseFloat(goalForm.targetAmount),
-      currentAmount: parseFloat(goalForm.currentAmount || "0"),
-      ...(deadline ? { deadline } : {}),
-    })
-    await fetchSavingsGoals()
-    resetGoalForm()
-    setGoalDialogOpen(false)
+    setSavingGoal(true)
+    try {
+      await savingsGoalService.create({
+        name: goalForm.name,
+        targetAmount: parseFloat(goalForm.targetAmount),
+        currentAmount: parseFloat(goalForm.currentAmount || "0"),
+        ...(deadline ? { deadline } : {}),
+      })
+      await fetchSavingsGoals()
+      resetGoalForm()
+      setGoalDialogOpen(false)
+    } finally {
+      setSavingGoal(false)
+    }
   }
 
   const handleDeposit = async () => {
-    if (!selectedGoalId || !depositAmount) return
+    if (!selectedGoalId || !depositAmount || depositing) return
     const goal = savingsGoals.find((g) => g.id === selectedGoalId)
     if (!goal) return
-    await savingsGoalService.update(selectedGoalId, {
-      currentAmount: goal.currentAmount + parseFloat(depositAmount),
-    })
-    await fetchSavingsGoals()
-    setDepositAmount("")
-    setDepositDialogOpen(false)
-    setSelectedGoalId(null)
+    setDepositing(true)
+    try {
+      await savingsGoalService.update(selectedGoalId, {
+        currentAmount: goal.currentAmount + parseFloat(depositAmount),
+      })
+      await fetchSavingsGoals()
+      setDepositAmount("")
+      setDepositDialogOpen(false)
+      setSelectedGoalId(null)
+    } finally {
+      setDepositing(false)
+    }
   }
 
   const handleDeleteGoal = async (id: string) => {
-    await savingsGoalService.delete(id)
-    await fetchSavingsGoals()
+    if (deletingGoalId) return
+    setDeletingGoalId(id)
+    try {
+      await savingsGoalService.delete(id)
+      await fetchSavingsGoals()
+    } finally {
+      setDeletingGoalId(null)
+    }
   }
 
   const totalMonthlyIncome = useMemo(
@@ -161,6 +180,7 @@ export function ProjecaoClient() {
               goalForm={goalForm}
               onGoalFormChange={setGoalForm}
               onCreate={handleAddGoal}
+              saving={savingGoal}
             />
           </div>
 
@@ -175,6 +195,7 @@ export function ProjecaoClient() {
               setDepositDialogOpen(true)
             }}
             onDeleteGoal={handleDeleteGoal}
+            deletingGoalId={deletingGoalId}
           />
         </TabsContent>
       </Tabs>
@@ -185,6 +206,7 @@ export function ProjecaoClient() {
         depositAmount={depositAmount}
         onDepositAmountChange={setDepositAmount}
         onDeposit={handleDeposit}
+        saving={depositing}
       />
     </div>
   )

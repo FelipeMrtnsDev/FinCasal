@@ -1,6 +1,12 @@
 import api from "@/lib/api";
-import { addMonths, differenceInCalendarMonths, format, subMonths } from "date-fns";
+import {
+  addMonths,
+  differenceInCalendarMonths,
+  format,
+  subMonths,
+} from "date-fns";
 import { ptBR } from "date-fns/locale";
+import { AxiosError } from "axios";
 
 export interface DashboardSummary {
   totalIncomes: number;
@@ -76,6 +82,41 @@ const parseMonthToken = (value?: string): Date | null => {
   return new Date(`${value}-01`);
 };
 
+const getStatusCode = (error: unknown): number | null => {
+  if (error instanceof AxiosError) return error.response?.status ?? null;
+  if (typeof error === "object" && error !== null && "response" in error) {
+    const response = (error as { response?: { status?: number } }).response;
+    return response?.status ?? null;
+  }
+  return null;
+};
+
+async function getWithFallback<T>(
+  paths: string[],
+  params?: Record<string, string | number>,
+): Promise<T> {
+  let lastError: unknown;
+  for (const path of paths) {
+    try {
+      const response = await api.get<T>(path, { params });
+      return response.data;
+    } catch (error) {
+      lastError = error;
+      const status = getStatusCode(error);
+      if (status === 400 && params && Object.keys(params).length > 0) {
+        try {
+          const response = await api.get<T>(path);
+          return response.data;
+        } catch (retryError) {
+          lastError = retryError;
+        }
+      }
+      if (status !== 404 && status !== 400) break;
+    }
+  }
+  throw lastError;
+}
+
 function normalizeSummary(data: unknown): DashboardSummary {
   if (!data || typeof data !== "object") return summaryZero;
   const record = data as Record<string, unknown>;
@@ -141,9 +182,9 @@ function normalizeSummary(data: unknown): DashboardSummary {
 function normalizeEvolutionRows(
   data: unknown,
   baseMonth?: string,
-  startMonth?: string
+  startMonth?: string,
 ): MonthlyEvolution[] {
-  data: unknown,
+  const rows = Array.isArray(data) ? data : [];
   const reference = parseMonthToken(baseMonth) || new Date();
   const userStart = parseMonthToken(startMonth);
   const fallbackStart = subMonths(reference, 5);
@@ -222,7 +263,13 @@ function normalizePaymentMethodRows(data: unknown): PaymentMethodData[] {
   const normalizeName = (raw: string): string => {
     const key = raw.toLowerCase();
     if (key.includes("pix")) return "Pix";
-    if (key.includes("credit") || key.includes("card") || key.includes("cart")) return "Cartao";
+    if (
+      key.includes("credit") ||
+      key.includes("card") ||
+      key.includes("cart")
+    ) {
+      return "Cartao";
+    }
     if (key.includes("cash") || key.includes("dinhe")) return "Dinheiro";
     if (key.includes("transfer")) return "Transferencia";
     return "Outro";
@@ -246,7 +293,9 @@ function normalizePaymentMethodRows(data: unknown): PaymentMethodData[] {
           color: colorByName[key] || colorByName.outro,
         };
       })
-      .filter((item): item is PaymentMethodData => Boolean(item) && item.value > 0);
+      .filter(
+        (item): item is PaymentMethodData => item !== null && item.value > 0,
+      );
   }
 
   if (data && typeof data === "object") {
@@ -267,80 +316,363 @@ function normalizePaymentMethodRows(data: unknown): PaymentMethodData[] {
   return [];
 }
 
+function normalizeCategoryRows(data: unknown): CategoryData[] {
+  if (!Array.isArray(data)) return [];
+  return data
+    .map((item, index) => {
+      if (!item || typeof item !== "object") return null;
+      const record = item as Record<string, unknown>;
+      const name =
+        (typeof record.name === "string" && record.name) ||
+        (typeof record.category === "string" && record.category) ||
+        "Outros";
+      const value = toNumber(record.value ?? record.amount ?? record.total);
+      const color =
+        (typeof record.color === "string" && record.color) ||
+        ["#21C25E", "#15803d", "#4ade80", "#166534", "#86efac"][index % 5];
+      return { name, value, color };
+    })
+    .filter(
+      (row): row is CategoryData =>
+        row !== null && Number.isFinite(row.value) && row.value > 0,
+    );
+}
+
+function normalizePersonRows(data: unknown): PersonData[] {
+  if (!Array.isArray(data)) return [];
+  return data
+    .map((item, index) => {
+      if (!item || typeof item !== "object") return null;
+      const record = item as Record<string, unknown>;
+      const rawName =
+        (typeof record.name === "string" && record.name) ||
+        (typeof record.person === "string" && record.person) ||
+        (index === 0 ? "Eu" : "Parceiro");
+      const name =
+        rawName.toLowerCase() === "eu"
+          ? "Eu"
+          : rawName.toLowerCase() === "parceiro"
+            ? "Parceiro"
+            : rawName;
+      const value = toNumber(record.value ?? record.amount ?? record.total);
+      const color =
+        (typeof record.color === "string" && record.color) ||
+        (name === "Eu" ? "#21C25E" : "#15803d");
+      return { name, value, color };
+    })
+    .filter(
+      (row): row is PersonData =>
+        row !== null && Number.isFinite(row.value) && row.value > 0,
+    );
+}
+
+type RawExpense = {
+  amount: number | string;
+  date: string;
+  paymentMethod?: string;
+  type?: string;
+  person?: string;
+  category?: string | { name?: string };
+  categoryData?: { name?: string; color?: string };
+};
+
+type RawIncome = {
+  amount: number | string;
+  date: string;
+};
+
+const paymentMethodColor: Record<string, string> = {
+  Pix: "#21C25E",
+  Cartao: "#15803d",
+  Dinheiro: "#4ade80",
+  Transferencia: "#166534",
+  Outro: "#86efac",
+};
+
+const normalizePaymentLabel = (value?: string): string => {
+  const key = String(value || "").toLowerCase();
+  if (key.includes("pix")) return "Pix";
+  if (key.includes("credit") || key.includes("card") || key.includes("cart"))
+    return "Cartao";
+  if (key.includes("cash") || key.includes("dinhe")) return "Dinheiro";
+  if (key.includes("transfer")) return "Transferencia";
+  return "Outro";
+};
+
+const monthKey = (dateValue?: string): string =>
+  String(dateValue || "").slice(0, 7);
+const isFromMonth = (dateValue: string | undefined, month?: string): boolean =>
+  !month || monthKey(dateValue) === month;
+
+const buildWindowMonths = (baseMonth?: string, startMonth?: string): Date[] => {
+  const reference = parseMonthToken(baseMonth) || new Date();
+  const userStart = parseMonthToken(startMonth);
+  const fallbackStart = subMonths(reference, 5);
+  const windowStart = (() => {
+    if (!userStart) return fallbackStart;
+    const monthGap = differenceInCalendarMonths(reference, userStart);
+    if (monthGap >= 5) return subMonths(reference, 5);
+    return userStart;
+  })();
+  return Array.from({ length: 6 }, (_, i) => addMonths(windowStart, i));
+};
+
+async function getExpensesRaw(): Promise<RawExpense[]> {
+  const data = await getWithFallback<RawExpense[]>(["/expenses"]);
+  return Array.isArray(data) ? data : [];
+}
+
+async function getIncomesRaw(): Promise<RawIncome[]> {
+  const data = await getWithFallback<RawIncome[]>(["/incomes"]);
+  return Array.isArray(data) ? data : [];
+}
+
 export const summaryService = {
   getSummary: async (month?: string): Promise<DashboardSummary> => {
     try {
-      const params = month ? { month } : {};
-      const response = await api.get<unknown>("/summary/", { params });
-      return normalizeSummary(response.data);
+      const params = month ? { month } : undefined;
+      const data = await getWithFallback<unknown>(
+        ["/summary", "/summary/", "/dashboard/summary"],
+        params,
+      );
+      return normalizeSummary(data);
     } catch (error) {
       console.error("Erro ao buscar resumo do dashboard", error);
-      return summaryZero;
+      try {
+        const [expenses, incomes] = await Promise.all([
+          getExpensesRaw(),
+          getIncomesRaw(),
+        ]);
+        const monthExpenses = expenses.filter((expense) =>
+          isFromMonth(expense.date, month),
+        );
+        const monthIncomes = incomes.filter((income) =>
+          isFromMonth(income.date, month),
+        );
+
+        const totalExpenses = monthExpenses.reduce(
+          (acc, item) => acc + toNumber(item.amount),
+          0,
+        );
+        const totalIncomes = monthIncomes.reduce(
+          (acc, item) => acc + toNumber(item.amount),
+          0,
+        );
+        const pixExpenses = monthExpenses
+          .filter((item) => normalizePaymentLabel(item.paymentMethod) === "Pix")
+          .reduce((acc, item) => acc + toNumber(item.amount), 0);
+        const cardExpenses = monthExpenses
+          .filter(
+            (item) => normalizePaymentLabel(item.paymentMethod) === "Cartao",
+          )
+          .reduce((acc, item) => acc + toNumber(item.amount), 0);
+        const fixedExpenses = monthExpenses
+          .filter((item) =>
+            String(item.type || "")
+              .toLowerCase()
+              .includes("fix"),
+          )
+          .reduce((acc, item) => acc + toNumber(item.amount), 0);
+        const variableExpenses = totalExpenses - fixedExpenses;
+
+        return {
+          totalIncomes,
+          totalExpenses,
+          balance: totalIncomes - totalExpenses,
+          pixExpenses,
+          cardExpenses,
+          fixedExpenses,
+          variableExpenses,
+          byPerson: {
+            eu: monthExpenses
+              .filter(
+                (item) => String(item.person || "").toLowerCase() === "eu",
+              )
+              .reduce((acc, item) => acc + toNumber(item.amount), 0),
+            parceiro: monthExpenses
+              .filter(
+                (item) => String(item.person || "").toLowerCase() !== "eu",
+              )
+              .reduce((acc, item) => acc + toNumber(item.amount), 0),
+          },
+        };
+      } catch {
+        return summaryZero;
+      }
     }
   },
 
-  getMonthlyEvolution: async (month?: string, startMonth?: string): Promise<MonthlyEvolution[]> => {
+  getMonthlyEvolution: async (
+    month?: string,
+    startMonth?: string,
+  ): Promise<MonthlyEvolution[]> => {
     try {
-      const params = month ? { month } : {};
-      const response = await api.get<unknown>("/summary/monthly-evolution", {
-      return normalizeEvolutionRows(response.data, month, startMonth);
-      });
-      return normalizeEvolutionRows(response.data, month);
-      return normalizeEvolutionRows([], month, startMonth);
+      const params = month ? { month } : undefined;
+      const data = await getWithFallback<unknown>(
+        [
+          "/summary/monthly-evolution",
+          "/dashboard/monthly-evolution",
+          "/dashboard/evolution",
+        ],
+        params,
+      );
+      return normalizeEvolutionRows(data, month, startMonth);
+    } catch (error) {
       console.error("Erro ao buscar evolução mensal", error);
-      return normalizeEvolutionRows([], month);
+      try {
+        const [expenses, incomes] = await Promise.all([
+          getExpensesRaw(),
+          getIncomesRaw(),
+        ]);
+        const months = buildWindowMonths(month, startMonth);
+        return months.map((monthDate) => {
+          const token = monthToken(monthDate);
+          const despesas = expenses
+            .filter((item) => monthKey(item.date) === token)
+            .reduce((acc, item) => acc + toNumber(item.amount), 0);
+          const renda = incomes
+            .filter((item) => monthKey(item.date) === token)
+            .reduce((acc, item) => acc + toNumber(item.amount), 0);
+          return {
+            month: monthLabel(monthDate),
+            despesas,
+            renda,
+            saldo: renda - despesas,
+          };
+        });
+      } catch {
+        return normalizeEvolutionRows([], month, startMonth);
+      }
+    }
+  },
 
   getByCategory: async (month?: string): Promise<CategoryData[]> => {
     try {
-      const params = month ? { month } : {};
-      const response = await api.get<CategoryData[]>("/summary/by-category", {
+      const params = month ? { month } : undefined;
+      const data = await getWithFallback<unknown>(
+        ["/summary/by-category", "/dashboard/by-category"],
         params,
-      });
-      return response.data;
+      );
+      return normalizeCategoryRows(data);
     } catch (error) {
       console.error("Erro ao buscar categorias", error);
-      return [];
+      try {
+        const expenses = await getExpensesRaw();
+        const monthExpenses = expenses.filter((expense) =>
+          isFromMonth(expense.date, month),
+        );
+        const grouped = new Map<string, number>();
+        for (const item of monthExpenses) {
+          const name =
+            item.categoryData?.name ||
+            (typeof item.category === "object"
+              ? item.category?.name
+              : item.category) ||
+            "Outros";
+          grouped.set(name, (grouped.get(name) || 0) + toNumber(item.amount));
+        }
+        return Array.from(grouped.entries()).map(([name, value], index) => ({
+          name,
+          value,
+          color: ["#21C25E", "#15803d", "#4ade80", "#166534", "#86efac"][
+            index % 5
+          ],
+        }));
+      } catch {
+        return [];
+      }
     }
   },
 
   getByPaymentMethod: async (month?: string): Promise<PaymentMethodData[]> => {
     try {
-      const params = month ? { month } : {};
-      const response = await api.get<unknown>(
-        "/summary/by-payment-method",
-        { params },
+      const params = month ? { month } : undefined;
+      const data = await getWithFallback<unknown>(
+        ["/summary/by-payment-method", "/dashboard/by-payment-method"],
+        params,
       );
-      return normalizePaymentMethodRows(response.data);
+      return normalizePaymentMethodRows(data);
     } catch (error) {
       console.error("Erro ao buscar métodos de pagamento", error);
-      return [];
+      try {
+        const expenses = await getExpensesRaw();
+        const monthExpenses = expenses.filter((expense) =>
+          isFromMonth(expense.date, month),
+        );
+        const grouped = new Map<string, number>();
+        for (const item of monthExpenses) {
+          const label = normalizePaymentLabel(item.paymentMethod);
+          grouped.set(label, (grouped.get(label) || 0) + toNumber(item.amount));
+        }
+        return Array.from(grouped.entries())
+          .map(([name, value]) => ({
+            name,
+            value,
+            color: paymentMethodColor[name] || paymentMethodColor.Outro,
+          }))
+          .filter((row) => row.value > 0);
+      } catch {
+        return [];
+      }
     }
   },
 
   getByPerson: async (month?: string): Promise<PersonData[]> => {
     try {
-      const params = month ? { month } : {};
-      const response = await api.get<PersonData[]>("/summary/by-person", {
+      const params = month ? { month } : undefined;
+      const data = await getWithFallback<unknown>(
+        ["/summary/by-person", "/dashboard/by-person"],
         params,
-      });
-      return response.data;
+      );
+      return normalizePersonRows(data);
     } catch (error) {
       console.error("Erro ao buscar dados por pessoa", error);
-      return [];
+      try {
+        const expenses = await getExpensesRaw();
+        const monthExpenses = expenses.filter((expense) =>
+          isFromMonth(expense.date, month),
+        );
+        const eu = monthExpenses
+          .filter((item) => String(item.person || "").toLowerCase() === "eu")
+          .reduce((acc, item) => acc + toNumber(item.amount), 0);
+        const parceiro = monthExpenses
+          .filter((item) => String(item.person || "").toLowerCase() !== "eu")
+          .reduce((acc, item) => acc + toNumber(item.amount), 0);
+        return [
+          { name: "Eu", value: eu, color: "#21C25E" },
+          { name: "Parceiro", value: parceiro, color: "#15803d" },
+        ].filter((row) => row.value > 0);
+      } catch {
+        return [];
+      }
     }
   },
 
   getDailySpending: async (month?: string): Promise<DailySpending[]> => {
     try {
-      const params = month ? { month } : {};
-      const response = await api.get<DailySpending[]>(
-        "/summary/daily-spending",
-        { params },
+      const params = month ? { month } : undefined;
+      return await getWithFallback<DailySpending[]>(
+        ["/summary/daily-spending", "/dashboard/daily-spending"],
+        params,
       );
-      return response.data;
     } catch (error) {
       console.error("Erro ao buscar gastos diários", error);
-      return [];
+      try {
+        const expenses = await getExpensesRaw();
+        const monthExpenses = expenses.filter((expense) =>
+          isFromMonth(expense.date, month),
+        );
+        const grouped = new Map<string, number>();
+        for (const item of monthExpenses) {
+          const day = String(item.date || "").slice(8, 10);
+          grouped.set(day, (grouped.get(day) || 0) + toNumber(item.amount));
+        }
+        return Array.from(grouped.entries())
+          .map(([dia, valor]) => ({ dia, valor }))
+          .sort((a, b) => Number(a.dia) - Number(b.dia));
+      } catch {
+        return [];
+      }
     }
   },
 };

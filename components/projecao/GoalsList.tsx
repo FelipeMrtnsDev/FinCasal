@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { cn } from "@/lib/utils"
 import { format, parseISO, differenceInMonths } from "date-fns"
-import { Trash2 } from "lucide-react"
+import { Trash2, Loader2 } from "lucide-react"
 import { motion } from "framer-motion"
 import { SavingsGoal } from "@/lib/types"
 import { formatCurrency } from "./utils"
@@ -13,9 +13,10 @@ type GoalsListProps = {
   savingsGoals: SavingsGoal[]
   onOpenDeposit: (goalId: string) => void
   onDeleteGoal: (goalId: string) => Promise<void>
+  deletingGoalId?: string | null
 }
 
-export function GoalsList({ savingsGoals, onOpenDeposit, onDeleteGoal }: GoalsListProps) {
+export function GoalsList({ savingsGoals, onOpenDeposit, onDeleteGoal, deletingGoalId }: GoalsListProps) {
   return (
     <Card>
       <CardHeader>
@@ -61,8 +62,13 @@ export function GoalsList({ savingsGoals, onOpenDeposit, onDeleteGoal }: GoalsLi
                         size="icon"
                         className="h-8 w-8 text-muted-foreground hover:text-destructive"
                         onClick={() => onDeleteGoal(goal.id)}
+                        disabled={deletingGoalId === goal.id}
                       >
-                        <Trash2 className="w-4 h-4" />
+                        {deletingGoalId === goal.id ? (
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                        ) : (
+                          <Trash2 className="w-4 h-4" />
+                        )}
                       </Button>
                     </div>
                   </div>
