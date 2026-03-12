@@ -61,6 +61,10 @@ import {
   Pie,
   Cell,
   Legend,
+  LineChart,
+  Line,
+  Area,
+  AreaChart,
 } from "recharts"
 
 function formatCurrency(value: number) {
@@ -441,6 +445,41 @@ export default function InvestimentosPage() {
     return Array.from(map.entries()).map(([name, d]) => ({ name, faturamento: d.faturamento, custo: d.custo, unidades: d.unidades, lucro: d.faturamento - d.custo }))
   }, [sales])
 
+  // Margem por produto (para grafico de barras horizontais)
+  const marginByProduct = useMemo(() => {
+    return saleProducts.map((p) => {
+      const margin = p.salePrice > 0 ? ((p.salePrice - p.costPrice) / p.salePrice) * 100 : 0
+      const lucroUnit = p.salePrice - p.costPrice
+      return { name: p.name, margem: parseFloat(margin.toFixed(1)), lucroUnit }
+    }).sort((a, b) => b.margem - a.margem)
+  }, [saleProducts])
+
+  // Evolucao diaria de vendas (ultimos 14 dias)
+  const dailySales = useMemo(() => {
+    const today = new Date()
+    const days: { date: string; faturamento: number; lucro: number }[] = []
+    for (let i = 13; i >= 0; i--) {
+      const d = new Date(today)
+      d.setDate(d.getDate() - i)
+      const dateStr = format(d, "yyyy-MM-dd")
+      const label = format(d, "dd/MM")
+      const daySales = sales.filter((s) => s.date === dateStr)
+      const faturamento = daySales.reduce((a, s) => a + s.unitPrice * s.quantity, 0)
+      const lucro = daySales.reduce((a, s) => a + (s.unitPrice - s.unitCost) * s.quantity, 0)
+      days.push({ date: label, faturamento, lucro })
+    }
+    return days
+  }, [sales])
+
+  // Lucro por categoria (para grafico de barras)
+  const lucroPorCategoria = useMemo(() => {
+    return byCategory.map((c) => ({
+      name: c.name,
+      lucro: c.lucro,
+      margem: c.faturamento > 0 ? parseFloat(((c.lucro / c.faturamento) * 100).toFixed(1)) : 0,
+    })).sort((a, b) => b.lucro - a.lucro)
+  }, [byCategory])
+
   const investStats = [
     { label: "Total Aportado", value: totalAportes, icon: ArrowDownRight, color: "amber" },
     { label: "Total Retornos", value: totalRetornos, icon: TrendingUp, color: "green" },
@@ -609,6 +648,96 @@ export default function InvestimentosPage() {
                 </CardContent>
               </Card>
             </div>
+          )}
+
+          {/* New charts: Margin, Daily Evolution, Profit by Category */}
+          {(marginByProduct.length > 0 || dailySales.some((d) => d.faturamento > 0) || lucroPorCategoria.length > 0) && (
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              {/* Margem por produto - barras horizontais */}
+              {marginByProduct.length > 0 && (
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-base">Margem por Produto</CardTitle>
+                    <CardDescription>Porcentagem de lucro sobre o preco de venda</CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <ResponsiveContainer width="100%" height={Math.max(200, marginByProduct.length * 45)}>
+                      <BarChart data={marginByProduct} layout="vertical">
+                        <CartesianGrid strokeDasharray="3 3" className="stroke-border" horizontal={false} />
+                        <XAxis type="number" domain={[0, 100]} tick={{ fontSize: 11 }} tickFormatter={(v) => `${v}%`} />
+                        <YAxis type="category" dataKey="name" tick={{ fontSize: 11 }} width={100} />
+                        <Tooltip
+                          formatter={(value: number, name: string) => [
+                            name === "margem" ? `${value}%` : formatCurrency(value),
+                            name === "margem" ? "Margem" : "Lucro/un"
+                          ]}
+                        />
+                        <Bar dataKey="margem" name="Margem" fill="#21C25E" radius={[0, 4, 4, 0]} />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </CardContent>
+                </Card>
+              )}
+
+              {/* Lucro por categoria */}
+              {lucroPorCategoria.length > 0 && (
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-base">Lucro por Categoria</CardTitle>
+                    <CardDescription>Lucro total gerado por cada categoria</CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <ResponsiveContainer width="100%" height={260}>
+                      <BarChart data={lucroPorCategoria}>
+                        <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
+                        <XAxis dataKey="name" tick={{ fontSize: 11 }} />
+                        <YAxis tick={{ fontSize: 11 }} />
+                        <Tooltip
+                          formatter={(value: number, name: string) => [
+                            name === "margem" ? `${value}%` : formatCurrency(value),
+                            name === "margem" ? "Margem" : "Lucro"
+                          ]}
+                        />
+                        <Bar dataKey="lucro" name="Lucro" fill="#166534" radius={[4, 4, 0, 0]} />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </CardContent>
+                </Card>
+              )}
+            </div>
+          )}
+
+          {/* Evolucao diaria - area chart */}
+          {dailySales.some((d) => d.faturamento > 0) && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base">Evolucao de Vendas (14 dias)</CardTitle>
+                <CardDescription>Faturamento e lucro diario</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <ResponsiveContainer width="100%" height={280}>
+                  <AreaChart data={dailySales}>
+                    <defs>
+                      <linearGradient id="gradFat" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="#21C25E" stopOpacity={0.3} />
+                        <stop offset="95%" stopColor="#21C25E" stopOpacity={0} />
+                      </linearGradient>
+                      <linearGradient id="gradLucro" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="#166534" stopOpacity={0.3} />
+                        <stop offset="95%" stopColor="#166534" stopOpacity={0} />
+                      </linearGradient>
+                    </defs>
+                    <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
+                    <XAxis dataKey="date" tick={{ fontSize: 11 }} />
+                    <YAxis tick={{ fontSize: 11 }} />
+                    <Tooltip formatter={(value: number) => [formatCurrency(value)]} />
+                    <Legend iconType="circle" iconSize={8} />
+                    <Area type="monotone" dataKey="faturamento" name="Faturamento" stroke="#21C25E" fill="url(#gradFat)" strokeWidth={2} />
+                    <Area type="monotone" dataKey="lucro" name="Lucro" stroke="#166534" fill="url(#gradLucro)" strokeWidth={2} />
+                  </AreaChart>
+                </ResponsiveContainer>
+              </CardContent>
+            </Card>
           )}
 
           {/* By category list — clickable */}
