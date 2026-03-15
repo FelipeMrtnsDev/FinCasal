@@ -1,3 +1,8 @@
+export interface AddonMedia {
+  type: "image" | "video"
+  url: string
+}
+
 export interface Addon {
   id: string
   name: string
@@ -6,6 +11,7 @@ export interface Addon {
   price: number
   category: string
   image: string
+  media: AddonMedia[]
   features: string[]
   badge?: "Novo" | "Popular" | "Destaque"
   color: string
@@ -22,6 +28,9 @@ export const ADDONS: Addon[] = [
     price: 9.90,
     category: "Relatorios",
     image: "/addons/relatorio-mensal.jpg",
+    media: [
+      { type: "image", url: "/addons/relatorio-mensal.jpg" },
+    ],
     badge: "Popular",
     color: "#21C25E",
     features: [
@@ -41,6 +50,9 @@ export const ADDONS: Addon[] = [
     price: 14.90,
     category: "Inteligencia Artificial",
     image: "/addons/ia-categorias.jpg",
+    media: [
+      { type: "image", url: "/addons/ia-categorias.jpg" },
+    ],
     badge: "Novo",
     color: "#7C3AED",
     features: [
@@ -60,6 +72,9 @@ export const ADDONS: Addon[] = [
     price: 7.90,
     category: "Notificacoes",
     image: "/addons/alertas-inteligentes.jpg",
+    media: [
+      { type: "image", url: "/addons/alertas-inteligentes.jpg" },
+    ],
     badge: "Destaque",
     color: "#F59E0B",
     features: [
@@ -79,6 +94,9 @@ export const ADDONS: Addon[] = [
     price: 12.90,
     category: "Metas",
     image: "/addons/metas-avancadas.jpg",
+    media: [
+      { type: "image", url: "/addons/metas-avancadas.jpg" },
+    ],
     color: "#10B981",
     features: [
       "Sub-metas e marcos intermediarios",
@@ -97,6 +115,9 @@ export const ADDONS: Addon[] = [
     price: 19.90,
     category: "Integracao",
     image: "/addons/multi-banco.jpg",
+    media: [
+      { type: "image", url: "/addons/multi-banco.jpg" },
+    ],
     color: "#3B82F6",
     features: [
       "Suporte a Nubank, Itau, Bradesco, Santander e mais",
@@ -115,6 +136,9 @@ export const ADDONS: Addon[] = [
     price: 24.90,
     category: "Familia",
     image: "/addons/modo-familia.jpg",
+    media: [
+      { type: "image", url: "/addons/modo-familia.jpg" },
+    ],
     color: "#EC4899",
     features: [
       "Ate 6 membros por dashboard",

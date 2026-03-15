@@ -6,7 +6,7 @@ import Link from "next/link"
 import { useParams, useRouter } from "next/navigation"
 import { ADDONS } from "@/lib/addons-data"
 import { Button } from "@/components/ui/button"
-import { ArrowLeft, Check } from "lucide-react"
+import { ArrowLeft, Check, ChevronLeft, ChevronRight, Play } from "lucide-react"
 import { cn } from "@/lib/utils"
 
 export default function AddonDetailPage() {
@@ -17,12 +17,14 @@ export default function AddonDetailPage() {
   
   const [purchased, setPurchased] = useState(false)
   const [loading, setLoading] = useState(false)
-  const [showConfetti, setShowConfetti] = useState(false)
+  const [currentSlide, setCurrentSlide] = useState(0)
+  const [mounted, setMounted] = useState(false)
   const audioRef = useRef<HTMLAudioElement | null>(null)
 
   useEffect(() => {
-    // Pre-load the success sound
-    audioRef.current = new Audio("data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoGAACBhYqFbF1fdH2Onq2xr6WVg3FjW2Bth5aqt76+tKiYh3VoYGBsf5Sms7u9uK2fj31tYmBkcH+UpLC4u7auoZKCcmZhYmx5jaGwuLq1rJ6QgXFmYWNseY2hr7i5tKudj4BwZWFja3mNoK+3ubOqnI5/b2RgYmp4jJ+ut7izo5uNfm5jX2FpdYudr7a4sKKZi3xtYl9ganSKm622trChl4l6bGFdX2dzipm0trOel4d4a2BcXmVyh5iqtbKrmY6Ed2lfXF1jcYWXprOyqZeMgnZoXVtcYm+Dk6SysamXioF0Zl1aW2BugJCjr6+mkYd+cmVbWVteb36Poq2spZCFe3BkWlhaXWx8jaGrq6SPg3hvY1pYWVxqeoyjqaihi4B3bWJZV1hbZ3mLoqimnomAdWxgWFZXWWV2iZ+mpJyHfXNqX1hVVldjdIacoqObhXtxaF5WVFVWYHKEmp+fmIJ4b2ZdVlNUVV5wgZienpWAd21kXFVTU1RdbX+VnJuSfnVrYltUUlJTW2t9k5qYj3tybGFaU1FRUlppeZCYlouAdWtiWlRSUVFYZ3aOlpSIf3RqYVlTUVBQVmV0jJSShn1yaV9YUlBPT1RjcoqQj4N6cGdfV1FPT09TYXCIjo2Be29mXldRT09OUV9uho2KfnlvZV5WUU9OTlBdbISKiXx2bmRcVVBOTU1OW2qChod5dG1jXFVQTk1MTVlne4OFd3JsYltUUE1MTExXZXmBgnVwamFaU09NTEtLVWN2f39zcWlgWVJOTEtLS1NhdHx9cW9oX1hRTUtKSkpRX3J6em9tZ15XUEBLE0lKT11wenpubWZdVk9MSkpJSU5cb3d3bWxmXVZPS0lJSElMWmp0dGtqZFxVTktJSEhISldobXJraWNbVE5LSUhHR0lXZGxwamhjW1ROS0lIR0dIVWJqbmlnYltTTktJR0dGSFNgaGtoZmBaUk5KSEdGRkdSXmZoZ2VfWVFNSUdGRkZHUFxkZmVjXlhQTElHRkVFR09aYmRjYV1XUExIRkVFRUZOWWBiYV9cVk9MR0ZFRERFTVdeYF9dW1VOSkdFREREREtVXF5dW1lUTklHRURERENKU1pbWllXUk1IRURDRENCSVFYW1lYVVFMSEVEQ0JCQkhPVldXVlNPTEdEQ0JCQUJHTlRWVVRST0tGQ0JBQUFBRkxSVFNSUU5KRkNCQUBAAA==")
+    setMounted(true)
+    // Satisfying success sound - coin/ding sound
+    audioRef.current = new Audio("data:audio/mp3;base64,SUQzBAAAAAAAI1RTU0UAAAAPAAADTGF2ZjU4Ljc2LjEwMAAAAAAAAAAAAAAA//tQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWGluZwAAAA8AAAACAAABhgC7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7//////////////////////////////////////////////////////////////////8AAAAATGF2YzU4LjEzAAAAAAAAAAAAAAAAJAAAAAAAAAAAAYYNkwsAAAAAAAAAAAAAAAAA//tQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWGluZwAAAA8AAAACAAABhgC7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7//////////////////////////////////////////////////////////////////8AAAAATGF2YzU4LjEzAAAAAAAAAAAAAAAAJAAAAAAAAAAAAYYNkwsAAAAAAAAAAAAAAAAA//tQxAAAAAANIAAAAAExBTUUzLjEwMFVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVf/7UMQpA8AAADSAAAAAMQUzLjEwMFVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVU=")
   }, [])
 
   if (!addon) {
@@ -36,79 +38,116 @@ export default function AddonDetailPage() {
     )
   }
 
+  const media = addon.media
+
   const handleBuy = async () => {
     setLoading(true)
-    await new Promise((r) => setTimeout(r, 800))
+    await new Promise((r) => setTimeout(r, 600))
     setLoading(false)
     setPurchased(true)
-    setShowConfetti(true)
     
     // Play success sound
     if (audioRef.current) {
       audioRef.current.currentTime = 0
+      audioRef.current.volume = 0.5
       audioRef.current.play().catch(() => {})
     }
+  }
 
-    // Hide confetti after animation
-    setTimeout(() => setShowConfetti(false), 2000)
+  const nextSlide = () => {
+    setCurrentSlide((prev) => (prev + 1) % media.length)
+  }
+
+  const prevSlide = () => {
+    setCurrentSlide((prev) => (prev - 1 + media.length) % media.length)
   }
 
   return (
-    <div className="flex flex-col gap-6 max-w-md mx-auto relative">
-      {/* Confetti Animation */}
-      {showConfetti && (
-        <div className="fixed inset-0 pointer-events-none z-50 overflow-hidden">
-          {[...Array(50)].map((_, i) => (
-            <div
-              key={i}
-              className="absolute w-2 h-2 rounded-full animate-confetti"
-              style={{
-                left: `${Math.random() * 100}%`,
-                backgroundColor: ["#21C25E", "#fbbf24", "#8b5cf6", "#ec4899", "#3b82f6"][Math.floor(Math.random() * 5)],
-                animationDelay: `${Math.random() * 0.5}s`,
-                animationDuration: `${1 + Math.random()}s`,
-              }}
-            />
-          ))}
-        </div>
+    <div 
+      className={cn(
+        "flex flex-col gap-6 max-w-lg mx-auto transition-all duration-500",
+        mounted ? "opacity-100 translate-y-0" : "opacity-0 translate-y-4"
       )}
-
+    >
       {/* Back */}
       <Link
         href="/marketplace"
-        className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors w-fit"
+        className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors w-fit group"
       >
-        <ArrowLeft className="w-4 h-4" />
+        <ArrowLeft className="w-4 h-4 transition-transform group-hover:-translate-x-1" />
         Voltar
       </Link>
 
-      {/* Image */}
+      {/* Media Carousel */}
       <div className="relative w-full aspect-video rounded-2xl overflow-hidden bg-muted">
-        <Image
-          src={addon.image}
-          alt={addon.name}
-          fill
-          className="object-cover"
-          priority
-        />
+        {media.map((item, index) => (
+          <div
+            key={index}
+            className={cn(
+              "absolute inset-0 transition-all duration-500 ease-out",
+              index === currentSlide 
+                ? "opacity-100 scale-100" 
+                : "opacity-0 scale-95 pointer-events-none"
+            )}
+          >
+            {item.type === "video" ? (
+              <video
+                src={item.url}
+                className="w-full h-full object-cover"
+                controls
+                playsInline
+              />
+            ) : (
+              <Image
+                src={item.url}
+                alt={`${addon.name} - ${index + 1}`}
+                fill
+                className="object-cover"
+                priority={index === 0}
+              />
+            )}
+          </div>
+        ))}
+
+        {/* Carousel Controls */}
+        {media.length > 1 && (
+          <>
+            <button
+              onClick={prevSlide}
+              className="absolute left-3 top-1/2 -translate-y-1/2 w-8 h-8 rounded-full bg-white/90 backdrop-blur flex items-center justify-center text-foreground hover:bg-white transition-all hover:scale-110 active:scale-95"
+            >
+              <ChevronLeft className="w-4 h-4" />
+            </button>
+            <button
+              onClick={nextSlide}
+              className="absolute right-3 top-1/2 -translate-y-1/2 w-8 h-8 rounded-full bg-white/90 backdrop-blur flex items-center justify-center text-foreground hover:bg-white transition-all hover:scale-110 active:scale-95"
+            >
+              <ChevronRight className="w-4 h-4" />
+            </button>
+
+            {/* Dots */}
+            <div className="absolute bottom-3 left-1/2 -translate-x-1/2 flex items-center gap-1.5">
+              {media.map((_, index) => (
+                <button
+                  key={index}
+                  onClick={() => setCurrentSlide(index)}
+                  className={cn(
+                    "w-1.5 h-1.5 rounded-full transition-all duration-300",
+                    index === currentSlide 
+                      ? "bg-white w-4" 
+                      : "bg-white/50 hover:bg-white/70"
+                  )}
+                />
+              ))}
+            </div>
+          </>
+        )}
       </div>
 
       {/* Info */}
-      <div className="flex flex-col gap-2">
+      <div className="flex flex-col gap-1">
         <h1 className="text-xl font-bold text-foreground">{addon.name}</h1>
-        <p className="text-sm text-muted-foreground leading-relaxed">{addon.tagline}</p>
-      </div>
-
-      {/* Features - minimal */}
-      <div className="flex flex-wrap gap-2">
-        {addon.features.slice(0, 3).map((feature, i) => (
-          <span
-            key={i}
-            className="text-xs text-muted-foreground bg-muted px-3 py-1.5 rounded-full"
-          >
-            {feature}
-          </span>
-        ))}
+        <p className="text-sm text-muted-foreground">{addon.tagline}</p>
       </div>
 
       {/* Price & Buy */}
@@ -121,18 +160,17 @@ export default function AddonDetailPage() {
         </div>
 
         {purchased ? (
-          <div className={cn(
-            "flex items-center gap-2 px-6 py-3 rounded-full bg-primary text-primary-foreground font-medium text-sm",
-            "animate-in zoom-in-95 duration-300"
-          )}>
+          <div 
+            className="flex items-center gap-2 px-6 py-3 rounded-full bg-primary text-primary-foreground font-medium text-sm animate-in zoom-in-90 duration-300"
+          >
             <Check className="w-4 h-4" />
             Instalado
           </div>
         ) : (
           <Button
             className={cn(
-              "px-6 h-12 rounded-full bg-primary text-primary-foreground hover:bg-primary/90 font-medium text-sm",
-              "transition-all duration-300 hover:scale-105 active:scale-95"
+              "px-8 h-12 rounded-full bg-primary text-primary-foreground hover:bg-primary/90 font-medium",
+              "transition-all duration-200 hover:scale-[1.02] active:scale-[0.98]"
             )}
             onClick={handleBuy}
             disabled={loading}
@@ -145,7 +183,6 @@ export default function AddonDetailPage() {
           </Button>
         )}
       </div>
-
     </div>
   )
 }
