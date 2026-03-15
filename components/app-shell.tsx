@@ -12,6 +12,7 @@ import {
   Settings,
   ChevronLeft,
   ChevronRight,
+  Store,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { useFinance } from "@/lib/finance-context"
@@ -23,6 +24,7 @@ const navItems = [
   { href: "/renda", label: "Renda", icon: Wallet },
   { href: "/investimentos", label: "Investimentos", icon: TrendingUp },
   { href: "/projecao", label: "Projecao", icon: PiggyBank },
+  { href: "/marketplace", label: "Marketplace", icon: Store },
 ]
 
 const mobileNavItems = [
@@ -31,6 +33,7 @@ const mobileNavItems = [
   { href: "/renda", label: "Renda", icon: Wallet },
   { href: "/investimentos", label: "Investir", icon: TrendingUp },
   { href: "/projecao", label: "Metas", icon: PiggyBank },
+  { href: "/marketplace", label: "Addons", icon: Store },
 ]
 
 export function AppShell({ children }: { children: React.ReactNode }) {
@@ -98,7 +101,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
         <nav className="flex-1 flex flex-col gap-1 px-3">
           {navItems.map((item) => {
-            const isActive = pathname === item.href
+            const isActive = pathname === item.href || pathname.startsWith(item.href + "/")
+            const isMarketplace = item.href === "/marketplace"
             return (
               <Link
                 key={item.href}
@@ -107,12 +111,19 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                   "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors",
                   isActive
                     ? "bg-sidebar-primary text-sidebar-primary-foreground"
+                    : isMarketplace
+                    ? "text-sidebar-primary hover:bg-sidebar-accent hover:text-sidebar-primary"
                     : "text-sidebar-foreground/70 hover:text-sidebar-foreground hover:bg-sidebar-accent"
                 )}
               >
                 <item.icon className="w-5 h-5 shrink-0" />
                 {!collapsed && (
                   <span className="whitespace-nowrap overflow-hidden">{item.label}</span>
+                )}
+                {!collapsed && isMarketplace && !isActive && (
+                  <span className="ml-auto text-[9px] font-bold uppercase tracking-wide bg-primary/20 text-primary px-1.5 py-0.5 rounded-full">
+                    Novo
+                  </span>
                 )}
               </Link>
             )
@@ -199,7 +210,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-card border-t border-border z-30">
           <div className="flex items-center justify-around h-16 px-1">
             {mobileNavItems.map((item) => {
-              const isActive = pathname === item.href
+              const isActive = pathname === item.href || pathname.startsWith(item.href + "/")
               return (
                 <Link
                   key={item.href}
