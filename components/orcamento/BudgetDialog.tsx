@@ -1,12 +1,13 @@
 "use client"
 
+import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Category } from "@/lib/types"
-import { Plus } from "lucide-react"
+import { HelpCircle, Plus } from "lucide-react"
 
 type BudgetDialogProps = {
   open: boolean
@@ -59,6 +60,13 @@ export function BudgetDialog({
                 ))}
               </SelectContent>
             </Select>
+            <Link
+              href="/configuracoes#categorias"
+              className="inline-flex items-center gap-1 text-xs text-primary hover:underline underline-offset-4"
+            >
+              <HelpCircle className="w-3.5 h-3.5" />
+              Como cadastrar categorias?
+            </Link>
           </div>
           <div className="flex flex-col gap-2">
             <Label>Limite (R$)</Label>

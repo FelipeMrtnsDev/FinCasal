@@ -5,6 +5,7 @@ import {
   Income,
   Investment,
   Category,
+  CategoryType,
   SavingsGoal,
 } from "@/lib/types";
 
@@ -125,6 +126,43 @@ const isDashboardRequiredError = (error: unknown): boolean => {
   return getErrorMessage(error).toLowerCase().includes("dashboard");
 };
 
+const normalizeCategoryType = (value: unknown): CategoryType | undefined => {
+  const normalized = String(value || "").toLowerCase();
+  if (normalized.includes("SALE") || normalized.includes("venda")) return "SALE";
+  if (normalized.includes("EXPENSE") || normalized.includes("desp")) return "EXPENSE";
+  return undefined;
+};
+
+const toBackendCategoryType = (type: CategoryType): "EXPENSE" | "SALE" =>
+  type === "SALE" ? "SALE" : "EXPENSE";
+
+const normalizeCategory = (
+  value: unknown,
+  fallbackType?: CategoryType,
+): Category | null => {
+  if (!value || typeof value !== "object") return null;
+  const record = value as Record<string, unknown>;
+  const id = record.id;
+  const name = record.name;
+  if (typeof id !== "string" || typeof name !== "string") return null;
+  return {
+    id,
+    name,
+    color: typeof record.color === "string" && record.color ? record.color : "#21C25E",
+    type: normalizeCategoryType(record.type) || fallbackType,
+  };
+};
+
+const normalizeCategoryList = (
+  data: unknown,
+  fallbackType?: CategoryType,
+): Category[] => {
+  if (!Array.isArray(data)) return [];
+  return data
+    .map((item) => normalizeCategory(item, fallbackType))
+    .filter((item): item is Category => item !== null);
+};
+
 let dashboardCheckCache: { checkedAt: number; hasDashboard: boolean } | null =
   null;
 
@@ -231,14 +269,45 @@ export const investmentService = {
 };
 
 export const categoryService = {
-  getAll: async (): Promise<Category[]> => {
+  getAll: async (type: CategoryType = "EXPENSE"): Promise<Category[]> => {
     if (!(await hasDashboardMembership())) return [];
-    const response = await api.get<Category[]>("/categories");
-    return response.data;
+    const params = { type: toBackendCategoryType(type) };
+    try {
+      const response = await api.get<unknown>("/categories", { params });
+      return normalizeCategoryList(response.data, type);
+    } catch (error) {
+      try {
+        const response = await api.get<unknown>("/categories", {
+          params: { type },
+        });
+        return normalizeCategoryList(response.data, type);
+      } catch {
+        try {
+          const response = await api.get<unknown>(`/categories/${type}`);
+          return normalizeCategoryList(response.data, type);
+        } catch {
+          if (!isBadRequest(error)) throw error;
+          const response = await api.get<unknown>("/categories");
+          const normalized = normalizeCategoryList(response.data);
+          return normalized.filter((category) => category.type ? category.type === type : true);
+        }
+      }
+    }
   },
   create: async (data: Omit<Category, "id">): Promise<Category> => {
-    const response = await api.post<Category>("/categories", data);
-    return response.data;
+    const payload = {
+      ...data,
+      type: data.type ? toBackendCategoryType(data.type) : undefined,
+    };
+    const response = await api.post<unknown>("/categories", payload);
+    return (
+      normalizeCategory(response.data, data.type || "EXPENSE") || {
+        id: "",
+        name: data.name,
+        color: data.color,
+        type: data.type || "EXPENSE",
+      }
+    );
   },
   delete: async (id: string): Promise<void> => {
     await api.delete(`/categories/${id}`);
@@ -247,8 +316,19 @@ export const categoryService = {
     id: string,
     data: Partial<Omit<Category, "id">>,
   ): Promise<Category> => {
-    const response = await api.patch<Category>(`/categories/${id}`, data);
-    return response.data;
+    const payload = {
+      ...data,
+      type: data.type ? toBackendCategoryType(data.type) : undefined,
+    };
+    const response = await api.patch<unknown>(`/categories/${id}`, payload);
+    return (
+      normalizeCategory(response.data, data.type) || {
+        id,
+        name: data.name || "",
+        color: data.color || "#21C25E",
+        type: data.type,
+      }
+    );
   },
 };
 

@@ -7,7 +7,7 @@ import {
   LayoutDashboard,
   Receipt,
   Wallet,
-  TrendingUp,
+  Tag,
   PiggyBank,
   Settings,
   ChevronLeft,
@@ -21,7 +21,7 @@ const navItems = [
   { href: "/", label: "Painel", icon: LayoutDashboard },
   { href: "/despesas", label: "Despesas", icon: Receipt },
   { href: "/renda", label: "Renda", icon: Wallet },
-  { href: "/investimentos", label: "Investimentos", icon: TrendingUp },
+  { href: "/investimentos", label: "Vendas", icon: Tag },
   { href: "/projecao", label: "Projecao", icon: PiggyBank },
 ]
 
@@ -29,7 +29,7 @@ const mobileNavItems = [
   { href: "/", label: "Painel", icon: LayoutDashboard },
   { href: "/despesas", label: "Despesas", icon: Receipt },
   { href: "/renda", label: "Renda", icon: Wallet },
-  { href: "/investimentos", label: "Investir", icon: TrendingUp },
+  { href: "/investimentos", label: "Vendas", icon: Tag },
   { href: "/projecao", label: "Metas", icon: PiggyBank },
 ]
 

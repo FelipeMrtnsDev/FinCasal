@@ -28,7 +28,7 @@ export default function DespesasPage() {
     try {
       const [expensesData, categoriesData] = await Promise.all([
         expenseService.getAll(),
-        categoryService.getAll()
+        categoryService.getAll("EXPENSE")
       ])
 
       console.log("Fetched expenses:", expensesData)

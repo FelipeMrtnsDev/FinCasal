@@ -32,7 +32,7 @@ export function BudgetTabContent() {
     const loadCategories = async () => {
       setLoadingCategories(true)
       try {
-        const data = await categoryService.getAll()
+        const data = await categoryService.getAll("EXPENSE")
         const normalized = (data || []).map((c) => ({
           ...c,
           color: c.color || "#21C25E",

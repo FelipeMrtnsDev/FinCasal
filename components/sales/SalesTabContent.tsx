@@ -3,7 +3,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react"
 import { PackagePlus, Plus, Receipt, ShoppingBag, TrendingDown, TrendingUp, Package } from "lucide-react"
 import { Button } from "@/components/ui/button"
-import { TabsContent } from "@/components/ui/tabs"
 import { Sale, SaleProduct, SalesStat } from "./types"
 import { saleProductService, salesService, SalesSummaryDTO } from "@/services/financeService"
 import { SalesStatsCards } from "./SalesStatsCards"
@@ -172,7 +171,7 @@ export function SalesTabContent() {
   }
 
   return (
-    <TabsContent value="vendas" className="flex flex-col gap-6 mt-4">
+    <div className="flex flex-col gap-6 mt-4">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div>
           <h1 className="text-2xl md:text-3xl font-bold text-foreground text-balance">Vendas</h1>
@@ -217,6 +216,6 @@ export function SalesTabContent() {
         />
       )}
       {!loading && <SaleDetailDialog sale={selectedSale} onClose={() => setSelectedSale(null)} onDelete={removeSale} />}
-    </TabsContent>
+    </div>
   )
 }

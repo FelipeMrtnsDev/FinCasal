@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
+import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -20,7 +21,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import { Plus } from "lucide-react"
+import { HelpCircle, Plus } from "lucide-react"
 import { format } from "date-fns"
 import { Category, Expense, ExpenseType, PaymentMethod, Person, PAYMENT_METHODS } from "@/lib/types"
 import { useFinance } from "@/lib/finance-context"
@@ -167,6 +168,13 @@ export function ExpenseDialog({ categories, onAdd }: ExpenseDialogProps) {
                   ))}
                 </SelectContent>
               </Select>
+              <Link
+                href="/configuracoes#categorias"
+                className="inline-flex items-center gap-1 text-xs text-primary hover:underline underline-offset-4"
+              >
+                <HelpCircle className="w-3.5 h-3.5" />
+                Como cadastrar categorias?
+              </Link>
             </div>
             <div className="flex flex-col gap-2">
               <Label>Pagamento</Label>

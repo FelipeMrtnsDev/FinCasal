@@ -111,7 +111,6 @@ async function getWithFallback<T>(
           lastError = retryError;
         }
       }
-      if (status !== 404 && status !== 400) break;
     }
   }
   throw lastError;

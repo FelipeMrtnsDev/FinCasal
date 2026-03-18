@@ -41,20 +41,27 @@ export function ConfiguracoesClient() {
   const [savingNames, setSavingNames] = useState(false)
 
   const [categories, setCategories] = useState<Category[]>([])
+  const [salesCategories, setSalesCategories] = useState<Category[]>([])
   const [loadingCategories, setLoadingCategories] = useState(true)
   const [newCatName, setNewCatName] = useState("")
   const [newCatColor, setNewCatColor] = useState("#21C25E")
+  const [newSaleCatName, setNewSaleCatName] = useState("")
+  const [newSaleCatColor, setNewSaleCatColor] = useState("#21C25E")
   const [addingCategory, setAddingCategory] = useState(false)
+  const [addingSalesCategory, setAddingSalesCategory] = useState(false)
   const [deletingCategoryId, setDeletingCategoryId] = useState<string | null>(null)
+  const [deletingSalesCategoryId, setDeletingSalesCategoryId] = useState<string | null>(null)
 
   const fetchSettings = async () => {
     setLoadingCategories(true)
     try {
-      const [categoriesData, dashboardData] = await Promise.all([
-        categoryService.getAll(),
+      const [expenseCategoriesData, salesCategoriesData, dashboardData] = await Promise.all([
+        categoryService.getAll("EXPENSE"),
+        categoryService.getAll("SALE"),
         dashboardService.get(),
       ])
-      setCategories(categoriesData || [])
+      setCategories(expenseCategoriesData || [])
+      setSalesCategories(salesCategoriesData || [])
 
       const apiNames = getNamesFromDashboardResponse(dashboardData)
       if (apiNames) {
@@ -64,6 +71,7 @@ export function ConfiguracoesClient() {
     } catch (error) {
       console.error("Erro ao carregar configuracoes:", error)
       setCategories([])
+      setSalesCategories([])
     } finally {
       setLoadingCategories(false)
     }
@@ -89,12 +97,25 @@ export function ConfiguracoesClient() {
     if (!newCatName.trim() || addingCategory) return
     setAddingCategory(true)
     try {
-      await categoryService.create({ name: newCatName.trim(), color: newCatColor })
+      await categoryService.create({ name: newCatName.trim(), color: newCatColor, type: "EXPENSE" })
       setNewCatName("")
       setNewCatColor("#21C25E")
       await fetchSettings()
     } finally {
       setAddingCategory(false)
+    }
+  }
+
+  const handleAddSalesCategory = async () => {
+    if (!newSaleCatName.trim() || addingSalesCategory) return
+    setAddingSalesCategory(true)
+    try {
+      await categoryService.create({ name: newSaleCatName.trim(), color: newSaleCatColor, type: "SALE" })
+      setNewSaleCatName("")
+      setNewSaleCatColor("#21C25E")
+      await fetchSettings()
+    } finally {
+      setAddingSalesCategory(false)
     }
   }
 
@@ -106,6 +127,17 @@ export function ConfiguracoesClient() {
       await fetchSettings()
     } finally {
       setDeletingCategoryId(null)
+    }
+  }
+
+  const handleDeleteSalesCategory = async (id: string) => {
+    if (deletingSalesCategoryId) return
+    setDeletingSalesCategoryId(id)
+    try {
+      await categoryService.delete(id)
+      await fetchSettings()
+    } finally {
+      setDeletingSalesCategoryId(null)
     }
   }
 
@@ -125,6 +157,10 @@ export function ConfiguracoesClient() {
       />
 
       <CategoriesCard
+        variant="expenses"
+        title="Categorias de Despesas"
+        description="Esta seção é para categorias de despesas."
+        accordionValue="categorias-despesas"
         categories={categories}
         newCatName={newCatName}
         newCatColor={newCatColor}
@@ -134,6 +170,24 @@ export function ConfiguracoesClient() {
         onDeleteCategory={handleDeleteCategory}
         adding={addingCategory}
         deletingId={deletingCategoryId}
+        loading={loadingCategories}
+        id="categorias"
+      />
+
+      <CategoriesCard
+        variant="sales"
+        title="Categorias de Vendas"
+        description="Esta seção é para categorias de vendas."
+        accordionValue="categorias-vendas"
+        categories={salesCategories}
+        newCatName={newSaleCatName}
+        newCatColor={newSaleCatColor}
+        onChangeName={setNewSaleCatName}
+        onChangeColor={setNewSaleCatColor}
+        onAddCategory={handleAddSalesCategory}
+        onDeleteCategory={handleDeleteSalesCategory}
+        adding={addingSalesCategory}
+        deletingId={deletingSalesCategoryId}
         loading={loadingCategories}
       />
 
