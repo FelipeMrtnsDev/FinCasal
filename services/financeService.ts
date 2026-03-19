@@ -131,8 +131,10 @@ const isDashboardRequiredError = (error: unknown): boolean => {
 
 const normalizeCategoryType = (value: unknown): CategoryType | undefined => {
   const normalized = String(value || "").toLowerCase();
-  if (normalized.includes("sale") || normalized.includes("venda")) return "SALE";
-  if (normalized.includes("expense") || normalized.includes("desp")) return "EXPENSE";
+  if (normalized.includes("sale") || normalized.includes("venda"))
+    return "SALE";
+  if (normalized.includes("expense") || normalized.includes("desp"))
+    return "EXPENSE";
   return undefined;
 };
 
@@ -156,7 +158,10 @@ const normalizeCategory = (
   return {
     id,
     name,
-    color: typeof record.color === "string" && record.color ? record.color : "#21C25E",
+    color:
+      typeof record.color === "string" && record.color
+        ? record.color
+        : "#21C25E",
     type: normalizeCategoryType(record.type) || fallbackType,
   };
 };
@@ -194,15 +199,18 @@ const hasDashboardMembership = async (): Promise<boolean> => {
 };
 
 export const expenseService = {
-  getAll: async (
-    params?: { view?: DataScope | ViewMode; [key: string]: any },
-  ): Promise<Expense[]> => {
+  getAll: async (params?: {
+    view?: DataScope | ViewMode;
+    [key: string]: any;
+  }): Promise<Expense[]> => {
     if (!(await hasDashboardMembership())) return [];
     const { limit, view, ...rest } = params || {};
     const scopedParams = { ...rest, view: toDataScope(view) };
     let response;
     try {
-      response = await api.get<Expense[]>("/expenses", { params: scopedParams });
+      response = await api.get<Expense[]>("/expenses", {
+        params: scopedParams,
+      });
     } catch {
       try {
         response = await api.get<Expense[]>("/expenses", { params: rest });
@@ -218,10 +226,7 @@ export const expenseService = {
 
     return response.data;
   },
-  create: async (
-    data: any,
-    view?: DataScope | ViewMode,
-  ): Promise<Expense> => {
+  create: async (data: any, view?: DataScope | ViewMode): Promise<Expense> => {
     const payload = { ...data, scope: toDataScope(view) };
     const response = await api.post<Expense>("/expenses", payload);
     return response.data;
@@ -238,9 +243,10 @@ export const expenseService = {
 };
 
 export const incomeService = {
-  getAll: async (
-    params?: { view?: DataScope | ViewMode; [key: string]: any },
-  ): Promise<Income[]> => {
+  getAll: async (params?: {
+    view?: DataScope | ViewMode;
+    [key: string]: any;
+  }): Promise<Income[]> => {
     if (!(await hasDashboardMembership())) return [];
     const { limit, view, ...rest } = params || {};
     const scopedParams = { ...rest, view: toDataScope(view) };
@@ -261,10 +267,7 @@ export const incomeService = {
     }
     return response.data;
   },
-  create: async (
-    data: any,
-    view?: DataScope | ViewMode,
-  ): Promise<Income> => {
+  create: async (data: any, view?: DataScope | ViewMode): Promise<Income> => {
     const payload = { ...data, scope: toDataScope(view) };
     const response = await api.post<Income>("/incomes", payload);
     return response.data;
@@ -278,9 +281,10 @@ export const incomeService = {
 };
 
 export const investmentService = {
-  getAll: async (
-    params?: { view?: DataScope | ViewMode; [key: string]: any },
-  ): Promise<Investment[]> => {
+  getAll: async (params?: {
+    view?: DataScope | ViewMode;
+    [key: string]: any;
+  }): Promise<Investment[]> => {
     if (!(await hasDashboardMembership())) return [];
     const { view, ...rest } = params || {};
     let response;
@@ -340,7 +344,9 @@ export const categoryService = {
           if (!isBadRequest(error)) throw error;
           const response = await api.get<unknown>("/categories");
           const normalized = normalizeCategoryList(response.data);
-          return normalized.filter((category) => category.type ? category.type === type : true);
+          return normalized.filter((category) =>
+            category.type ? category.type === type : true,
+          );
         }
       }
     }
@@ -409,6 +415,10 @@ export const dashboardService = {
   },
   join: async (inviteCode: string): Promise<any> => {
     const response = await api.post("/dashboard/join", { inviteCode });
+    return response.data;
+  },
+  invite: async (email: string): Promise<any> => {
+    const response = await api.post("/dashboard/invite", { email });
     return response.data;
   },
   get: async (): Promise<any> => {

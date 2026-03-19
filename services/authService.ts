@@ -61,4 +61,18 @@ export const authService = {
     const response = await api.get<User>("/auth/me");
     return response.data;
   },
+  updateName: async (name: string): Promise<User> => {
+    try {
+      const response = await api.patch<User>("/auth/me", { name });
+      return response.data;
+    } catch {
+      try {
+        const response = await api.patch<User>("/users/me", { name });
+        return response.data;
+      } catch {
+        const response = await api.patch<User>("/users/profile", { name });
+        return response.data;
+      }
+    }
+  },
 };

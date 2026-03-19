@@ -4,7 +4,9 @@ import { useEffect, useState } from "react"
 import { useFinance } from "@/lib/finance-context"
 import { Category } from "@/lib/types"
 import { categoryService, dashboardService } from "@/services/financeService"
-import { CoupleNamesCard } from "./CoupleNamesCard"
+import { authService } from "@/services/authService"
+import { OwnNameCard } from "./OwnNameCard"
+import { InvitePartnerCard } from "./InvitePartnerCard"
 import { CategoriesCard } from "./CategoriesCard"
 import { DataManagementCard } from "./DataManagementCard"
 
@@ -34,11 +36,26 @@ function getNamesFromDashboardResponse(
   return null
 }
 
+function hasPartnerFromDashboardResponse(data: unknown): boolean {
+  if (!data || typeof data !== "object") return false
+  const record = data as Record<string, unknown>
+  const users = record.users
+  if (Array.isArray(users) && users.length > 1) return true
+  if (typeof record.partnerId === "string" && record.partnerId.trim().length > 0) return true
+  if (typeof record.partnerEmail === "string" && record.partnerEmail.trim().length > 0) return true
+  return false
+}
+
 export function ConfiguracoesClient() {
   const { personNames, setPersonNames } = useFinance()
-  const [names, setNames] = useState(personNames)
+  const [ownName, setOwnName] = useState(personNames.eu)
+  const [partnerName, setPartnerName] = useState(personNames.parceiro)
   const [namesSaved, setNamesSaved] = useState(false)
   const [savingNames, setSavingNames] = useState(false)
+  const [inviteEmail, setInviteEmail] = useState("")
+  const [hasPartnerJoined, setHasPartnerJoined] = useState(false)
+  const [invitingByEmail, setInvitingByEmail] = useState(false)
+  const [inviteSent, setInviteSent] = useState(false)
 
   const [categories, setCategories] = useState<Category[]>([])
   const [salesCategories, setSalesCategories] = useState<Category[]>([])
@@ -55,18 +72,24 @@ export function ConfiguracoesClient() {
   const fetchSettings = async () => {
     setLoadingCategories(true)
     try {
-      const [expenseCategoriesData, salesCategoriesData, dashboardData] = await Promise.all([
+      const [expenseCategoriesData, salesCategoriesData, dashboardData, userData] = await Promise.all([
         categoryService.getAll("EXPENSE"),
         categoryService.getAll("SALE"),
         dashboardService.get(),
+        authService.me(),
       ])
       setCategories(expenseCategoriesData || [])
       setSalesCategories(salesCategoriesData || [])
+      setHasPartnerJoined(hasPartnerFromDashboardResponse(dashboardData))
+      if (userData?.name) {
+        setOwnName(userData.name)
+      }
 
       const apiNames = getNamesFromDashboardResponse(dashboardData)
       if (apiNames) {
-        setNames(apiNames)
-        setPersonNames(apiNames)
+        const nextPartnerName = apiNames.parceiro || personNames.parceiro
+        setPartnerName(nextPartnerName)
+        setPersonNames({ eu: userData?.name || apiNames.eu, parceiro: nextPartnerName })
       }
     } catch (error) {
       console.error("Erro ao carregar configuracoes:", error)
@@ -82,14 +105,37 @@ export function ConfiguracoesClient() {
   }, [])
 
   const handleSaveNames = async () => {
+    if (!ownName.trim()) return
     setSavingNames(true)
     try {
-      await dashboardService.update({ personNames: names })
-      setPersonNames(names)
+      const updatedUser = await authService.updateName(ownName.trim())
+      const nextOwnName = updatedUser?.name || ownName.trim()
+      setOwnName(nextOwnName)
+      setPersonNames({ eu: nextOwnName, parceiro: partnerName })
       setNamesSaved(true)
       setTimeout(() => setNamesSaved(false), 2000)
     } finally {
       setSavingNames(false)
+    }
+  }
+
+  const handleInviteByEmail = async () => {
+    if (!inviteEmail.trim() || invitingByEmail) return
+    setInvitingByEmail(true)
+    setInviteSent(false)
+    try {
+      const dashboard = await dashboardService.invite(inviteEmail.trim())
+      setHasPartnerJoined(hasPartnerFromDashboardResponse(dashboard))
+      const namesFromDashboard = getNamesFromDashboardResponse(dashboard)
+      if (namesFromDashboard?.parceiro) {
+        setPartnerName(namesFromDashboard.parceiro)
+        setPersonNames({ eu: ownName, parceiro: namesFromDashboard.parceiro })
+      }
+      setInviteEmail("")
+      setInviteSent(true)
+      setTimeout(() => setInviteSent(false), 2500)
+    } finally {
+      setInvitingByEmail(false)
     }
   }
 
@@ -148,12 +194,22 @@ export function ConfiguracoesClient() {
         <p className="text-muted-foreground text-sm mt-1">Personalize os nomes e categorias</p>
       </div>
 
-      <CoupleNamesCard
-        names={names}
-        onChange={setNames}
-        onSave={handleSaveNames}
+      <OwnNameCard
+        ownName={ownName}
+        onChangeOwnName={setOwnName}
+        onSaveOwnName={handleSaveNames}
         saved={namesSaved}
         saving={savingNames}
+      />
+
+      <InvitePartnerCard
+        partnerName={partnerName}
+        hasPartnerJoined={hasPartnerJoined}
+        inviteEmail={inviteEmail}
+        onChangeInviteEmail={setInviteEmail}
+        onInviteByEmail={handleInviteByEmail}
+        inviting={invitingByEmail}
+        inviteSent={inviteSent}
       />
 
       <CategoriesCard

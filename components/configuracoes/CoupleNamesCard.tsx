@@ -4,7 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { User } from "lucide-react"
+import { User, Mail, Loader2 } from "lucide-react"
 
 type CoupleNamesCardProps = {
   names: { eu: string; parceiro: string }
@@ -12,9 +12,29 @@ type CoupleNamesCardProps = {
   onSave: () => Promise<void>
   saved: boolean
   saving: boolean
+  hasPartnerJoined: boolean
+  inviteEmail: string
+  onChangeInviteEmail: (value: string) => void
+  onInviteByEmail: () => Promise<void>
+  inviting: boolean
+  inviteCode: string
+  inviteSent: boolean
 }
 
-export function CoupleNamesCard({ names, onChange, onSave, saved, saving }: CoupleNamesCardProps) {
+export function CoupleNamesCard({
+  names,
+  onChange,
+  onSave,
+  saved,
+  saving,
+  hasPartnerJoined,
+  inviteEmail,
+  onChangeInviteEmail,
+  onInviteByEmail,
+  inviting,
+  inviteCode,
+  inviteSent,
+}: CoupleNamesCardProps) {
   return (
     <Card>
       <CardHeader>
@@ -39,14 +59,42 @@ export function CoupleNamesCard({ names, onChange, onSave, saved, saving }: Coup
                 placeholder="Eu"
               />
             </div>
-            <div className="flex flex-col gap-2">
-              <Label>Nome do(a) parceiro(a)</Label>
-              <Input
-                value={names.parceiro}
-                onChange={(e) => onChange({ ...names, parceiro: e.target.value })}
-                placeholder="Parceiro(a)"
-              />
-            </div>
+            {hasPartnerJoined ? (
+              <div className="flex flex-col gap-2">
+                <Label>Parceiro(a)</Label>
+                <Input value={names.parceiro} disabled />
+              </div>
+            ) : (
+              <div className="flex flex-col gap-3 rounded-lg border border-border p-3">
+                <div className="flex items-center gap-2 text-sm font-medium text-foreground">
+                  <Mail className="w-4 h-4 text-primary" />
+                  Convidar parceiro(a) por email
+                </div>
+                <div className="flex flex-col sm:flex-row gap-2">
+                  <Input
+                    type="email"
+                    value={inviteEmail}
+                    onChange={(e) => onChangeInviteEmail(e.target.value)}
+                    placeholder="nome@exemplo.com"
+                  />
+                  <Button
+                    onClick={onInviteByEmail}
+                    disabled={!inviteEmail.trim() || inviting}
+                    className="bg-primary text-primary-foreground hover:bg-primary/90"
+                  >
+                    {inviting ? <Loader2 className="w-4 h-4 animate-spin" /> : "Enviar convite"}
+                  </Button>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Codigo de convite: <span className="font-mono text-foreground">{inviteCode || "-"}</span>
+                </p>
+                {inviteSent && (
+                  <span className="text-xs text-primary font-medium">
+                    Convite preparado no email com sucesso!
+                  </span>
+                )}
+              </div>
+            )}
           </div>
           <div className="flex items-center gap-3">
             <Button
@@ -65,4 +113,3 @@ export function CoupleNamesCard({ names, onChange, onSave, saved, saving }: Coup
     </Card>
   )
 }
-
