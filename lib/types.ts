@@ -6,6 +6,7 @@ export type PaymentMethod =
   | "outro";
 export type ExpenseType = "fixo" | "variavel";
 export type ViewMode = "individual" | "casal";
+export type DataScope = "INDIVIDUAL" | "COUPLE";
 export type Person = "eu" | "parceiro";
 export type CategoryType = "EXPENSE" | "SALE";
 

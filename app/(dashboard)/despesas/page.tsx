@@ -27,7 +27,7 @@ export default function DespesasPage() {
     setLoading(true)
     try {
       const [expensesData, categoriesData] = await Promise.all([
-        expenseService.getAll(),
+        expenseService.getAll({ view: viewMode }),
         categoryService.getAll("EXPENSE")
       ])
 
@@ -44,10 +44,10 @@ export default function DespesasPage() {
 
   useEffect(() => {
     fetchData()
-  }, [])
+  }, [viewMode])
 
   const handleAddExpense = async (expenseData: any) => {
-    await expenseService.create(expenseData)
+    await expenseService.create(expenseData, viewMode)
     await fetchData() // Refresh list
   }
 
@@ -70,7 +70,7 @@ export default function DespesasPage() {
 
     // Let's loop for now as it's safer without bulk endpoint info
     for (const expense of expensesData) {
-      await expenseService.create(expense)
+      await expenseService.create(expense, viewMode)
     }
     await fetchData()
   }

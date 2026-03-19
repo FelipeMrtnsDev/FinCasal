@@ -6,7 +6,7 @@ import {
   subMonths,
 } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import { AxiosError } from "axios";
+import { DataScope, ViewMode } from "@/lib/types";
 
 export interface DashboardSummary {
   totalIncomes: number;
@@ -82,13 +82,9 @@ const parseMonthToken = (value?: string): Date | null => {
   return new Date(`${value}-01`);
 };
 
-const getStatusCode = (error: unknown): number | null => {
-  if (error instanceof AxiosError) return error.response?.status ?? null;
-  if (typeof error === "object" && error !== null && "response" in error) {
-    const response = (error as { response?: { status?: number } }).response;
-    return response?.status ?? null;
-  }
-  return null;
+const toDataScope = (view?: DataScope | ViewMode): DataScope => {
+  if (view === "COUPLE" || view === "casal") return "COUPLE";
+  return "INDIVIDUAL";
 };
 
 async function getWithFallback<T>(
@@ -102,8 +98,7 @@ async function getWithFallback<T>(
       return response.data;
     } catch (error) {
       lastError = error;
-      const status = getStatusCode(error);
-      if (status === 400 && params && Object.keys(params).length > 0) {
+      if (params && Object.keys(params).length > 0) {
         try {
           const response = await api.get<T>(path);
           return response.data;
@@ -416,20 +411,27 @@ const buildWindowMonths = (baseMonth?: string, startMonth?: string): Date[] => {
   return Array.from({ length: 6 }, (_, i) => addMonths(windowStart, i));
 };
 
-async function getExpensesRaw(): Promise<RawExpense[]> {
-  const data = await getWithFallback<RawExpense[]>(["/expenses"]);
+async function getExpensesRaw(view?: DataScope | ViewMode): Promise<RawExpense[]> {
+  const data = await getWithFallback<RawExpense[]>(["/expenses"], {
+    view: toDataScope(view),
+  });
   return Array.isArray(data) ? data : [];
 }
 
-async function getIncomesRaw(): Promise<RawIncome[]> {
-  const data = await getWithFallback<RawIncome[]>(["/incomes"]);
+async function getIncomesRaw(view?: DataScope | ViewMode): Promise<RawIncome[]> {
+  const data = await getWithFallback<RawIncome[]>(["/incomes"], {
+    view: toDataScope(view),
+  });
   return Array.isArray(data) ? data : [];
 }
 
 export const summaryService = {
-  getSummary: async (month?: string): Promise<DashboardSummary> => {
+  getSummary: async (
+    month?: string,
+    view?: DataScope | ViewMode,
+  ): Promise<DashboardSummary> => {
     try {
-      const params = month ? { month } : undefined;
+      const params = { ...(month ? { month } : {}), view: toDataScope(view) };
       const data = await getWithFallback<unknown>(
         ["/summary", "/summary/", "/dashboard/summary"],
         params,
@@ -439,8 +441,8 @@ export const summaryService = {
       console.error("Erro ao buscar resumo do dashboard", error);
       try {
         const [expenses, incomes] = await Promise.all([
-          getExpensesRaw(),
-          getIncomesRaw(),
+          getExpensesRaw(view),
+          getIncomesRaw(view),
         ]);
         const monthExpenses = expenses.filter((expense) =>
           isFromMonth(expense.date, month),
@@ -504,9 +506,10 @@ export const summaryService = {
   getMonthlyEvolution: async (
     month?: string,
     startMonth?: string,
+    view?: DataScope | ViewMode,
   ): Promise<MonthlyEvolution[]> => {
     try {
-      const params = month ? { month } : undefined;
+      const params = { ...(month ? { month } : {}), view: toDataScope(view) };
       const data = await getWithFallback<unknown>(
         [
           "/summary/monthly-evolution",
@@ -520,8 +523,8 @@ export const summaryService = {
       console.error("Erro ao buscar evolução mensal", error);
       try {
         const [expenses, incomes] = await Promise.all([
-          getExpensesRaw(),
-          getIncomesRaw(),
+          getExpensesRaw(view),
+          getIncomesRaw(view),
         ]);
         const months = buildWindowMonths(month, startMonth);
         return months.map((monthDate) => {
@@ -545,9 +548,12 @@ export const summaryService = {
     }
   },
 
-  getByCategory: async (month?: string): Promise<CategoryData[]> => {
+  getByCategory: async (
+    month?: string,
+    view?: DataScope | ViewMode,
+  ): Promise<CategoryData[]> => {
     try {
-      const params = month ? { month } : undefined;
+      const params = { ...(month ? { month } : {}), view: toDataScope(view) };
       const data = await getWithFallback<unknown>(
         ["/summary/by-category", "/dashboard/by-category"],
         params,
@@ -556,7 +562,7 @@ export const summaryService = {
     } catch (error) {
       console.error("Erro ao buscar categorias", error);
       try {
-        const expenses = await getExpensesRaw();
+        const expenses = await getExpensesRaw(view);
         const monthExpenses = expenses.filter((expense) =>
           isFromMonth(expense.date, month),
         );
@@ -583,9 +589,12 @@ export const summaryService = {
     }
   },
 
-  getByPaymentMethod: async (month?: string): Promise<PaymentMethodData[]> => {
+  getByPaymentMethod: async (
+    month?: string,
+    view?: DataScope | ViewMode,
+  ): Promise<PaymentMethodData[]> => {
     try {
-      const params = month ? { month } : undefined;
+      const params = { ...(month ? { month } : {}), view: toDataScope(view) };
       const data = await getWithFallback<unknown>(
         ["/summary/by-payment-method", "/dashboard/by-payment-method"],
         params,
@@ -594,7 +603,7 @@ export const summaryService = {
     } catch (error) {
       console.error("Erro ao buscar métodos de pagamento", error);
       try {
-        const expenses = await getExpensesRaw();
+        const expenses = await getExpensesRaw(view);
         const monthExpenses = expenses.filter((expense) =>
           isFromMonth(expense.date, month),
         );
@@ -616,9 +625,12 @@ export const summaryService = {
     }
   },
 
-  getByPerson: async (month?: string): Promise<PersonData[]> => {
+  getByPerson: async (
+    month?: string,
+    view?: DataScope | ViewMode,
+  ): Promise<PersonData[]> => {
     try {
-      const params = month ? { month } : undefined;
+      const params = { ...(month ? { month } : {}), view: toDataScope(view) };
       const data = await getWithFallback<unknown>(
         ["/summary/by-person", "/dashboard/by-person"],
         params,
@@ -627,7 +639,7 @@ export const summaryService = {
     } catch (error) {
       console.error("Erro ao buscar dados por pessoa", error);
       try {
-        const expenses = await getExpensesRaw();
+        const expenses = await getExpensesRaw(view);
         const monthExpenses = expenses.filter((expense) =>
           isFromMonth(expense.date, month),
         );
@@ -647,9 +659,12 @@ export const summaryService = {
     }
   },
 
-  getDailySpending: async (month?: string): Promise<DailySpending[]> => {
+  getDailySpending: async (
+    month?: string,
+    view?: DataScope | ViewMode,
+  ): Promise<DailySpending[]> => {
     try {
-      const params = month ? { month } : undefined;
+      const params = { ...(month ? { month } : {}), view: toDataScope(view) };
       return await getWithFallback<DailySpending[]>(
         ["/summary/daily-spending", "/dashboard/daily-spending"],
         params,
@@ -657,7 +672,7 @@ export const summaryService = {
     } catch (error) {
       console.error("Erro ao buscar gastos diários", error);
       try {
-        const expenses = await getExpensesRaw();
+        const expenses = await getExpensesRaw(view);
         const monthExpenses = expenses.filter((expense) =>
           isFromMonth(expense.date, month),
         );

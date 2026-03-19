@@ -3,18 +3,20 @@
 import { useState, useEffect } from "react"
 import { incomeService } from "@/services/financeService"
 import { Income } from "@/lib/types"
+import { useFinance } from "@/lib/finance-context"
 import { IncomeDialog } from "@/components/incomes/IncomeDialog"
 import { IncomeStats } from "@/components/incomes/IncomeStats"
 import { IncomeList } from "@/components/incomes/IncomeList"
 
 export default function RendaPage() {
+  const { viewMode } = useFinance()
   const [incomes, setIncomes] = useState<Income[]>([])
   const [loading, setLoading] = useState(true)
 
   const fetchData = async () => {
     setLoading(true)
     try {
-      const data = await incomeService.getAll()
+      const data = await incomeService.getAll({ view: viewMode })
       console.log("Fetched incomes:", data)
       setIncomes(data)
     } catch (error) {
@@ -26,10 +28,10 @@ export default function RendaPage() {
 
   useEffect(() => {
     fetchData()
-  }, [])
+  }, [viewMode])
 
   const handleAddIncome = async (incomeData: any) => {
-    await incomeService.create(incomeData)
+    await incomeService.create(incomeData, viewMode)
     await fetchData()
   }
 

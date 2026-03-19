@@ -6,7 +6,9 @@ import {
   Investment,
   Category,
   CategoryType,
+  DataScope,
   SavingsGoal,
+  ViewMode,
 } from "@/lib/types";
 
 export interface BudgetDTO {
@@ -77,6 +79,7 @@ export interface CreateSalePayload {
   quantity: number;
   date: string;
   personId?: string;
+  scope?: DataScope;
 }
 
 export interface SalesSummaryDTO {
@@ -128,9 +131,14 @@ const isDashboardRequiredError = (error: unknown): boolean => {
 
 const normalizeCategoryType = (value: unknown): CategoryType | undefined => {
   const normalized = String(value || "").toLowerCase();
-  if (normalized.includes("SALE") || normalized.includes("venda")) return "SALE";
-  if (normalized.includes("EXPENSE") || normalized.includes("desp")) return "EXPENSE";
+  if (normalized.includes("sale") || normalized.includes("venda")) return "SALE";
+  if (normalized.includes("expense") || normalized.includes("desp")) return "EXPENSE";
   return undefined;
+};
+
+const toDataScope = (view?: DataScope | ViewMode): DataScope => {
+  if (view === "COUPLE" || view === "casal") return "COUPLE";
+  return "INDIVIDUAL";
 };
 
 const toBackendCategoryType = (type: CategoryType): "EXPENSE" | "SALE" =>
@@ -186,15 +194,22 @@ const hasDashboardMembership = async (): Promise<boolean> => {
 };
 
 export const expenseService = {
-  getAll: async (params?: any): Promise<Expense[]> => {
+  getAll: async (
+    params?: { view?: DataScope | ViewMode; [key: string]: any },
+  ): Promise<Expense[]> => {
     if (!(await hasDashboardMembership())) return [];
-    const { limit, ...rest } = params || {};
+    const { limit, view, ...rest } = params || {};
+    const scopedParams = { ...rest, view: toDataScope(view) };
     let response;
     try {
-      response = await api.get<Expense[]>("/expenses", { params: rest });
-    } catch (error) {
-      if (!isBadRequest(error)) throw error;
-      response = await api.get<Expense[]>("/expenses");
+      response = await api.get<Expense[]>("/expenses", { params: scopedParams });
+    } catch {
+      try {
+        response = await api.get<Expense[]>("/expenses", { params: rest });
+      } catch (error) {
+        if (!isBadRequest(error)) throw error;
+        response = await api.get<Expense[]>("/expenses");
+      }
     }
 
     if (limit && Array.isArray(response.data)) {
@@ -203,8 +218,12 @@ export const expenseService = {
 
     return response.data;
   },
-  create: async (data: any): Promise<Expense> => {
-    const response = await api.post<Expense>("/expenses", data);
+  create: async (
+    data: any,
+    view?: DataScope | ViewMode,
+  ): Promise<Expense> => {
+    const payload = { ...data, scope: toDataScope(view) };
+    const response = await api.post<Expense>("/expenses", payload);
     return response.data;
   },
   delete: async (id: string): Promise<void> => {
@@ -219,15 +238,22 @@ export const expenseService = {
 };
 
 export const incomeService = {
-  getAll: async (params?: any): Promise<Income[]> => {
+  getAll: async (
+    params?: { view?: DataScope | ViewMode; [key: string]: any },
+  ): Promise<Income[]> => {
     if (!(await hasDashboardMembership())) return [];
-    const { limit, ...rest } = params || {};
+    const { limit, view, ...rest } = params || {};
+    const scopedParams = { ...rest, view: toDataScope(view) };
     let response;
     try {
-      response = await api.get<Income[]>("/incomes", { params: rest });
-    } catch (error) {
-      if (!isBadRequest(error)) throw error;
-      response = await api.get<Income[]>("/incomes");
+      response = await api.get<Income[]>("/incomes", { params: scopedParams });
+    } catch {
+      try {
+        response = await api.get<Income[]>("/incomes", { params: rest });
+      } catch (error) {
+        if (!isBadRequest(error)) throw error;
+        response = await api.get<Income[]>("/incomes");
+      }
     }
 
     if (limit && Array.isArray(response.data)) {
@@ -235,8 +261,12 @@ export const incomeService = {
     }
     return response.data;
   },
-  create: async (data: any): Promise<Income> => {
-    const response = await api.post<Income>("/incomes", data);
+  create: async (
+    data: any,
+    view?: DataScope | ViewMode,
+  ): Promise<Income> => {
+    const payload = { ...data, scope: toDataScope(view) };
+    const response = await api.post<Income>("/incomes", payload);
     return response.data;
   },
   delete: async (id: string): Promise<void> => {
@@ -248,22 +278,43 @@ export const incomeService = {
 };
 
 export const investmentService = {
-  getAll: async (params?: any): Promise<Investment[]> => {
+  getAll: async (
+    params?: { view?: DataScope | ViewMode; [key: string]: any },
+  ): Promise<Investment[]> => {
     if (!(await hasDashboardMembership())) return [];
-    const response = await api.get<Investment[]>("/investments", { params });
+    const { view, ...rest } = params || {};
+    let response;
+    try {
+      response = await api.get<Investment[]>("/investments", {
+        params: { ...rest, view: toDataScope(view) },
+      });
+    } catch {
+      response = await api.get<Investment[]>("/investments", { params: rest });
+    }
     return response.data;
   },
-  create: async (data: any): Promise<Investment> => {
-    const response = await api.post<Investment>("/investments", data);
+  create: async (
+    data: any,
+    view?: DataScope | ViewMode,
+  ): Promise<Investment> => {
+    const payload = { ...data, scope: toDataScope(view) };
+    const response = await api.post<Investment>("/investments", payload);
     return response.data;
   },
   delete: async (id: string): Promise<void> => {
     await api.delete(`/investments/${id}`);
   },
-  getSummary: async (): Promise<any> => {
+  getSummary: async (view?: DataScope | ViewMode): Promise<any> => {
     if (!(await hasDashboardMembership()))
       return { totalInvested: 0, totalReturns: 0 };
-    const response = await api.get("/investments/summary");
+    let response;
+    try {
+      response = await api.get("/investments/summary", {
+        params: { view: toDataScope(view) },
+      });
+    } catch {
+      response = await api.get("/investments/summary");
+    }
     return response.data;
   },
 };
@@ -427,39 +478,82 @@ export const salesService = {
     month?: string;
     productId?: string;
     category?: string;
+    view?: DataScope | ViewMode;
   }): Promise<SaleDTO[]> => {
     if (!(await hasDashboardMembership())) return [];
-    const response = await api.get<SaleDTO[]>("/sales", { params });
+    const { view, ...rest } = params || {};
+    let response;
+    try {
+      response = await api.get<SaleDTO[]>("/sales", {
+        params: { ...rest, view: toDataScope(view) },
+      });
+    } catch {
+      response = await api.get<SaleDTO[]>("/sales", { params: rest });
+    }
     return response.data;
   },
-  create: async (data: CreateSalePayload): Promise<SaleDTO> => {
-    const response = await api.post<SaleDTO>("/sales", data);
+  create: async (
+    data: CreateSalePayload,
+    view?: DataScope | ViewMode,
+  ): Promise<SaleDTO> => {
+    const payload = { ...data, scope: data.scope || toDataScope(view) };
+    const response = await api.post<SaleDTO>("/sales", payload);
     return response.data;
   },
   delete: async (id: string): Promise<void> => {
     await api.delete(`/sales/${id}`);
   },
-  getSummary: async (month?: string): Promise<SalesSummaryDTO> => {
+  getSummary: async (
+    month?: string,
+    view?: DataScope | ViewMode,
+  ): Promise<SalesSummaryDTO> => {
     if (!(await hasDashboardMembership())) {
       return { totalRevenue: 0, totalCost: 0, totalProfit: 0, totalUnits: 0 };
     }
-    const response = await api.get<SalesSummaryDTO>("/sales/summary", {
-      params: month ? { month } : undefined,
-    });
+    let response;
+    try {
+      response = await api.get<SalesSummaryDTO>("/sales/summary", {
+        params: { ...(month ? { month } : {}), view: toDataScope(view) },
+      });
+    } catch {
+      response = await api.get<SalesSummaryDTO>("/sales/summary", {
+        params: month ? { month } : undefined,
+      });
+    }
     return response.data;
   },
-  getByCategory: async (month?: string): Promise<SalesByCategoryDTO[]> => {
+  getByCategory: async (
+    month?: string,
+    view?: DataScope | ViewMode,
+  ): Promise<SalesByCategoryDTO[]> => {
     if (!(await hasDashboardMembership())) return [];
-    const response = await api.get<SalesByCategoryDTO[]>("/sales/by-category", {
-      params: month ? { month } : undefined,
-    });
+    let response;
+    try {
+      response = await api.get<SalesByCategoryDTO[]>("/sales/by-category", {
+        params: { ...(month ? { month } : {}), view: toDataScope(view) },
+      });
+    } catch {
+      response = await api.get<SalesByCategoryDTO[]>("/sales/by-category", {
+        params: month ? { month } : undefined,
+      });
+    }
     return response.data;
   },
-  getByProduct: async (month?: string): Promise<SalesByProductDTO[]> => {
+  getByProduct: async (
+    month?: string,
+    view?: DataScope | ViewMode,
+  ): Promise<SalesByProductDTO[]> => {
     if (!(await hasDashboardMembership())) return [];
-    const response = await api.get<SalesByProductDTO[]>("/sales/by-product", {
-      params: month ? { month } : undefined,
-    });
+    let response;
+    try {
+      response = await api.get<SalesByProductDTO[]>("/sales/by-product", {
+        params: { ...(month ? { month } : {}), view: toDataScope(view) },
+      });
+    } catch {
+      response = await api.get<SalesByProductDTO[]>("/sales/by-product", {
+        params: month ? { month } : undefined,
+      });
+    }
     return response.data;
   },
 };

@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react"
 import { PackagePlus, Plus, Receipt, ShoppingBag, TrendingDown, TrendingUp, Package } from "lucide-react"
 import { Button } from "@/components/ui/button"
+import { useFinance } from "@/lib/finance-context"
 import { Sale, SaleProduct, SalesStat } from "./types"
 import { saleProductService, salesService, SalesSummaryDTO } from "@/services/financeService"
 import { SalesStatsCards } from "./SalesStatsCards"
@@ -15,6 +16,7 @@ import { SaleProductDialog } from "./SaleProductDialog"
 import { SaleDetailDialog } from "./SaleDetailDialog"
 
 export function SalesTabContent() {
+  const { viewMode } = useFinance()
   const [sales, setSales] = useState<Sale[]>([])
   const [saleProducts, setSaleProducts] = useState<SaleProduct[]>([])
   const [summary, setSummary] = useState<SalesSummaryDTO>({
@@ -36,10 +38,10 @@ export function SalesTabContent() {
     try {
       const [productsData, salesData, summaryData, byCategoryData, byProductData] = await Promise.all([
         saleProductService.getAll(),
-        salesService.getAll(),
-        salesService.getSummary(),
-        salesService.getByCategory(),
-        salesService.getByProduct(),
+        salesService.getAll({ view: viewMode }),
+        salesService.getSummary(undefined, viewMode),
+        salesService.getByCategory(undefined, viewMode),
+        salesService.getByProduct(undefined, viewMode),
       ])
 
       const normalizedProducts: SaleProduct[] = productsData.map((product) => ({
@@ -85,7 +87,7 @@ export function SalesTabContent() {
     } finally {
       setLoading(false)
     }
-  }, [])
+  }, [viewMode])
 
   useEffect(() => {
     loadData()
@@ -160,7 +162,7 @@ export function SalesTabContent() {
       productId: payload.productId,
       quantity: payload.quantity,
       date: payload.date,
-    })
+    }, viewMode)
     await loadData()
   }
 

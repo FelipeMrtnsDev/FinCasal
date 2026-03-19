@@ -5,6 +5,7 @@ import { Plus, ArrowDownRight, TrendingUp, TrendingDown, BarChart3 } from "lucid
 import { Button } from "@/components/ui/button"
 import { TabsContent } from "@/components/ui/tabs"
 import type { Investment } from "@/lib/types"
+import { useFinance } from "@/lib/finance-context"
 import { investmentService } from "@/services/financeService"
 import { InvestmentFormDialog } from "./InvestmentFormDialog"
 import { InvestmentStatsCards } from "./InvestmentStatsCards"
@@ -21,6 +22,7 @@ type InvestmentsTabContentProps = {
 }
 
 export function InvestmentsTabContent({ personNames }: InvestmentsTabContentProps) {
+  const { viewMode } = useFinance()
   const [investments, setInvestments] = useState<Investment[]>([])
   const [summary, setSummary] = useState<InvestmentsSummaryResponse | null>(null)
   const [loading, setLoading] = useState(true)
@@ -32,8 +34,8 @@ export function InvestmentsTabContent({ personNames }: InvestmentsTabContentProp
     setLoading(true)
     try {
       const [investmentsResponse, summaryResponse] = await Promise.all([
-        investmentService.getAll(),
-        investmentService.getSummary(),
+        investmentService.getAll({ view: viewMode }),
+        investmentService.getSummary(viewMode),
       ])
       setInvestments((investmentsResponse || []).map(normalizeInvestment))
       setSummary(summaryResponse || null)
@@ -48,7 +50,7 @@ export function InvestmentsTabContent({ personNames }: InvestmentsTabContentProp
 
   useEffect(() => {
     fetchData()
-  }, [])
+  }, [viewMode])
 
   const handleAddInvestment = async (payload: Omit<Investment, "id">) => {
     const asset = payload.asset.trim()
@@ -59,7 +61,7 @@ export function InvestmentsTabContent({ personNames }: InvestmentsTabContentProp
       type: BACKEND_TYPE_MAP[payload.type],
       ...(asset ? { asset } : {}),
     }
-    await investmentService.create(requestBody)
+    await investmentService.create(requestBody, viewMode)
     await fetchData()
   }
 

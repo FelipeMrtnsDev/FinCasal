@@ -52,16 +52,16 @@ export default function DashboardPage() {
       setLoading(true)
       try {
         const [summaryData, evolutionData, categoriesData, paymentMethodsData, peopleData, expensesData, incomesData] = await Promise.all([
-          summaryService.getSummary(currentMonth),
-          summaryService.getMonthlyEvolution(currentMonth, startMonth),
-          summaryService.getByCategory(currentMonth),
-          summaryService.getByPaymentMethod(currentMonth),
-          summaryService.getByPerson(currentMonth),
-          expenseService.getAll({ month: currentMonth, limit: 5 }),
-          incomeService.getAll({ month: currentMonth, limit: 5 })
+          summaryService.getSummary(currentMonth, viewMode),
+          summaryService.getMonthlyEvolution(currentMonth, startMonth, viewMode),
+          summaryService.getByCategory(currentMonth, viewMode),
+          summaryService.getByPaymentMethod(currentMonth, viewMode),
+          summaryService.getByPerson(currentMonth, viewMode),
+          expenseService.getAll({ month: currentMonth, limit: 5, view: viewMode }),
+          incomeService.getAll({ month: currentMonth, limit: 5, view: viewMode })
         ])
 
-        const allMonthExpenses = await expenseService.getAll({ month: currentMonth })
+        const allMonthExpenses = await expenseService.getAll({ month: currentMonth, view: viewMode })
         const pixFromExpenses = allMonthExpenses
           .filter((expense) => {
             const method = String(expense.paymentMethod || "").toLowerCase()
@@ -97,7 +97,7 @@ export default function DashboardPage() {
     }
 
     fetchData()
-  }, [currentMonth, startMonth])
+  }, [currentMonth, startMonth, viewMode])
 
   const [currentYear, currentMonthNumber] = currentMonth.split("-").map(Number)
   const monthDate = new Date(currentYear, (currentMonthNumber || 1) - 1, 1)
