@@ -37,6 +37,7 @@ export interface SaleProduct {
   category: string
   costPrice: number
   salePrice: number
+  stock: number
 }
 
 export interface Sale {
@@ -49,6 +50,18 @@ export interface Sale {
   unitPrice: number
   date: string
   person: Person
+}
+
+export type StockMovementType = "entrada" | "saida" | "ajuste"
+
+export interface StockMovement {
+  id: string
+  productId: string
+  productName: string
+  type: StockMovementType
+  quantity: number
+  date: string
+  note: string
 }
 
 export interface Investment {
@@ -91,6 +104,7 @@ export interface FinanceState {
   investments: Investment[]
   saleProducts: SaleProduct[]
   sales: Sale[]
+  stockMovements: StockMovement[]
   categories: Category[]
   savingsGoals: SavingsGoal[]
   budgets: Budget[]

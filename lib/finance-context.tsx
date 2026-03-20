@@ -1,7 +1,7 @@
 "use client"
 
 import React, { createContext, useContext, useState, useEffect, useCallback } from "react"
-import type { FinanceState, Expense, Income, Investment, SavingsGoal, Category, ViewMode, SaleProduct, Sale, Budget } from "@/lib/types"
+import type { FinanceState, Expense, Income, Investment, SavingsGoal, Category, ViewMode, SaleProduct, Sale, Budget, StockMovement } from "@/lib/types"
 import { DEFAULT_CATEGORIES } from "@/lib/types"
 
 const STORAGE_KEY = "finance-app-data"
@@ -12,6 +12,7 @@ const defaultState: FinanceState = {
   investments: [],
   saleProducts: [],
   sales: [],
+  stockMovements: [],
   categories: DEFAULT_CATEGORIES,
   savingsGoals: [],
   budgets: [],
@@ -31,6 +32,8 @@ interface FinanceContextType extends FinanceState {
   removeSaleProduct: (id: string) => void
   addSale: (sale: Omit<Sale, "id">) => void
   removeSale: (id: string) => void
+  addStockMovement: (movement: Omit<StockMovement, "id">) => void
+  updateProductStock: (productId: string, quantity: number) => void
   addCategory: (category: Omit<Category, "id">) => void
   removeCategory: (id: string) => void
   addSavingsGoal: (goal: Omit<SavingsGoal, "id">) => void
@@ -123,6 +126,17 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
     setState((s) => ({ ...s, sales: s.sales.filter((s2) => s2.id !== id) }))
   }, [])
 
+  const addStockMovement = useCallback((movement: Omit<StockMovement, "id">) => {
+    setState((s) => ({ ...s, stockMovements: [...s.stockMovements, { ...movement, id: genId() }] }))
+  }, [])
+
+  const updateProductStock = useCallback((productId: string, quantity: number) => {
+    setState((s) => ({
+      ...s,
+      saleProducts: s.saleProducts.map((p) => (p.id === productId ? { ...p, stock: quantity } : p)),
+    }))
+  }, [])
+
   const addCategory = useCallback((category: Omit<Category, "id">) => {
     setState((s) => ({
       ...s,
@@ -194,6 +208,8 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
         removeSaleProduct,
         addSale,
         removeSale,
+        addStockMovement,
+        updateProductStock,
         addCategory,
         removeCategory,
         addSavingsGoal,
