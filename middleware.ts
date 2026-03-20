@@ -1,7 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 
 const AUTH_COOKIE = "auth_token";
-const PUBLIC_PATHS = ["/login", "/registro", "/auth/callback"];
+const PUBLIC_PATHS = [
+  "/login",
+  "/registro",
+  "/auth/callback",
+  "/convite",
+  "/invite",
+];
 
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;

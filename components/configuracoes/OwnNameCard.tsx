@@ -12,6 +12,7 @@ type OwnNameCardProps = {
   onSaveOwnName: () => Promise<void>
   saving: boolean
   saved: boolean
+  error?: string
 }
 
 export function OwnNameCard({
@@ -20,6 +21,7 @@ export function OwnNameCard({
   onSaveOwnName,
   saving,
   saved,
+  error,
 }: OwnNameCardProps) {
   return (
     <Card>
@@ -54,9 +56,9 @@ export function OwnNameCard({
             </Button>
             {saved && <span className="text-sm text-primary font-medium">Salvo com sucesso!</span>}
           </div>
+          {error && <span className="text-sm text-destructive">{error}</span>}
         </div>
       </CardContent>
     </Card>
   )
 }
-

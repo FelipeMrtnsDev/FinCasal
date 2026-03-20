@@ -7,11 +7,13 @@ import { format, parseISO } from "date-fns"
 import { Expense, Income } from "@/lib/types"
 import { useMemo, useState } from "react"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { Skeleton } from "@/components/ui/skeleton"
 
 interface RecentActivityProps {
   expenses: Expense[]
   incomes: Income[]
   categories: any[]
+  loading?: boolean
 }
 
 function formatCurrency(value: number) {
@@ -34,7 +36,7 @@ function formatExpenseType(value: string) {
   return value
 }
 
-export function RecentActivity({ expenses, incomes, categories }: RecentActivityProps) {
+export function RecentActivity({ expenses, incomes, categories, loading = false }: RecentActivityProps) {
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const activities = useMemo(
     () =>
@@ -53,7 +55,20 @@ export function RecentActivity({ expenses, incomes, categories }: RecentActivity
         <CardDescription>Ultimas transacoes</CardDescription>
       </CardHeader>
       <CardContent>
-        {expenses.length === 0 && incomes.length === 0 ? (
+        {loading ? (
+          <div className="flex flex-col gap-2">
+            {Array.from({ length: 5 }).map((_, index) => (
+              <div key={index} className="flex items-center gap-3 py-2.5 px-3">
+                <Skeleton className="w-8 h-8 rounded-full shrink-0" />
+                <div className="flex flex-col gap-2 flex-1">
+                  <Skeleton className="h-3.5 w-36" />
+                  <Skeleton className="h-3 w-24" />
+                </div>
+                <Skeleton className="h-4 w-20" />
+              </div>
+            ))}
+          </div>
+        ) : expenses.length === 0 && incomes.length === 0 ? (
           <div className="py-8 text-center text-muted-foreground text-sm">
             Nenhuma transacao registrada. Comece adicionando suas despesas e renda.
           </div>

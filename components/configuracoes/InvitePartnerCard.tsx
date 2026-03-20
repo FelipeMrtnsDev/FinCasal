@@ -9,6 +9,7 @@ import { Mail, Loader2, UserRoundPlus } from "lucide-react"
 type InvitePartnerCardProps = {
   partnerName: string
   hasPartnerJoined: boolean
+  members: Array<{ name: string; email?: string }>
   inviteEmail: string
   onChangeInviteEmail: (value: string) => void
   onInviteByEmail: () => Promise<void>
@@ -19,12 +20,15 @@ type InvitePartnerCardProps = {
 export function InvitePartnerCard({
   partnerName,
   hasPartnerJoined,
+  members,
   inviteEmail,
   onChangeInviteEmail,
   onInviteByEmail,
   inviting,
   inviteSent,
 }: InvitePartnerCardProps) {
+  const showMembersList = hasPartnerJoined || members.length >= 2
+
   return (
     <Card>
       <CardHeader>
@@ -33,16 +37,23 @@ export function InvitePartnerCard({
             <UserRoundPlus className="w-4 h-4 text-primary" />
           </div>
           <div>
-            <CardTitle className="text-base">Convite do parceiro(a)</CardTitle>
-            <CardDescription>Convide por email para participar do dashboard</CardDescription>
+            <CardTitle className="text-base">Pessoas do Dashboard</CardTitle>
+            <CardDescription>Veja quem participa do seu dashboard</CardDescription>
           </div>
         </div>
       </CardHeader>
       <CardContent>
-        {hasPartnerJoined ? (
-          <div className="flex flex-col gap-2">
-            <Label>Parceiro(a) vinculado(a)</Label>
-            <Input value={partnerName || "Parceiro(a)"} disabled />
+        {showMembersList ? (
+          <div className="flex flex-col gap-3">
+            <Label>Pessoas no dashboard</Label>
+            <div className="flex flex-col gap-2">
+              {(members.length > 0 ? members : [{ name: "Você" }, { name: partnerName || "Parceiro(a)" }]).map((member, index) => (
+                <div key={`${member.name}-${index}`} className="rounded-lg border border-border p-3">
+                  <p className="text-sm font-medium text-foreground">{member.name}</p>
+                  {member.email && <p className="text-xs text-muted-foreground">{member.email}</p>}
+                </div>
+              ))}
+            </div>
           </div>
         ) : (
           <div className="flex flex-col gap-3">
@@ -75,4 +86,3 @@ export function InvitePartnerCard({
     </Card>
   )
 }
-

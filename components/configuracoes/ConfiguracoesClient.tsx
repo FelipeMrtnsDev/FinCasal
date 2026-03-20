@@ -9,6 +9,8 @@ import { OwnNameCard } from "./OwnNameCard"
 import { InvitePartnerCard } from "./InvitePartnerCard"
 import { CategoriesCard } from "./CategoriesCard"
 import { DataManagementCard } from "./DataManagementCard"
+import { Skeleton } from "@/components/ui/skeleton"
+import { AxiosError } from "axios"
 
 function getNamesFromDashboardResponse(
   data: unknown
@@ -46,14 +48,66 @@ function hasPartnerFromDashboardResponse(data: unknown): boolean {
   return false
 }
 
+type DashboardMember = {
+  id?: string
+  userId?: string
+  name: string
+  email?: string
+}
+
+function getMembersFromDashboardResponse(data: unknown): DashboardMember[] {
+  if (!data || typeof data !== "object") return []
+  const record = data as Record<string, unknown>
+  const users =
+    (Array.isArray(record.users) && record.users) ||
+    (Array.isArray(record.members) && record.members) ||
+    (Array.isArray(record.dashboardMembers) && record.dashboardMembers) ||
+    []
+  if (!Array.isArray(users) || users.length === 0) return []
+  const members: DashboardMember[] = []
+  for (const user of users) {
+    if (!user || typeof user !== "object") continue
+    const userRecord = user as Record<string, unknown>
+    const nestedUser = userRecord.user && typeof userRecord.user === "object"
+      ? (userRecord.user as Record<string, unknown>)
+      : null
+    const id =
+      (typeof userRecord.id === "string" && userRecord.id) ||
+      (typeof nestedUser?.id === "string" && nestedUser.id) ||
+      undefined
+    const userId =
+      (typeof userRecord.userId === "string" && userRecord.userId) ||
+      (typeof nestedUser?.userId === "string" && nestedUser.userId) ||
+      (typeof nestedUser?.id === "string" && nestedUser.id) ||
+      undefined
+    const name =
+      (typeof userRecord.name === "string" && userRecord.name) ||
+      (typeof userRecord.displayName === "string" && userRecord.displayName) ||
+      (typeof userRecord.fullName === "string" && userRecord.fullName) ||
+      (typeof nestedUser?.name === "string" && nestedUser.name) ||
+      ""
+    if (!name) continue
+    const email =
+      (typeof userRecord.email === "string" && userRecord.email) ||
+      (typeof nestedUser?.email === "string" && nestedUser.email) ||
+      undefined
+    members.push({ id, userId, name, email })
+  }
+  return members
+}
+
 export function ConfiguracoesClient() {
   const { personNames, setPersonNames } = useFinance()
   const [ownName, setOwnName] = useState(personNames.eu)
   const [partnerName, setPartnerName] = useState(personNames.parceiro)
+  const [currentUserId, setCurrentUserId] = useState("")
+  const [currentUserEmail, setCurrentUserEmail] = useState("")
   const [namesSaved, setNamesSaved] = useState(false)
   const [savingNames, setSavingNames] = useState(false)
+  const [nameSaveError, setNameSaveError] = useState("")
   const [inviteEmail, setInviteEmail] = useState("")
   const [hasPartnerJoined, setHasPartnerJoined] = useState(false)
+  const [dashboardMembers, setDashboardMembers] = useState<DashboardMember[]>([])
   const [invitingByEmail, setInvitingByEmail] = useState(false)
   const [inviteSent, setInviteSent] = useState(false)
 
@@ -80,9 +134,17 @@ export function ConfiguracoesClient() {
       ])
       setCategories(expenseCategoriesData || [])
       setSalesCategories(salesCategoriesData || [])
-      setHasPartnerJoined(hasPartnerFromDashboardResponse(dashboardData))
+      const members = getMembersFromDashboardResponse(dashboardData)
+      setDashboardMembers(members)
+      setHasPartnerJoined(hasPartnerFromDashboardResponse(dashboardData) || members.length >= 2)
       if (userData?.name) {
         setOwnName(userData.name)
+      }
+      if (userData?.id) {
+        setCurrentUserId(userData.id)
+      }
+      if (userData?.email) {
+        setCurrentUserEmail(userData.email)
       }
 
       const apiNames = getNamesFromDashboardResponse(dashboardData)
@@ -90,6 +152,19 @@ export function ConfiguracoesClient() {
         const nextPartnerName = apiNames.parceiro || personNames.parceiro
         setPartnerName(nextPartnerName)
         setPersonNames({ eu: userData?.name || apiNames.eu, parceiro: nextPartnerName })
+      } else if (members.length > 0) {
+        const selfMember =
+          members.find((member) => member.userId === userData?.id) ||
+          members.find((member) => member.email?.toLowerCase() === String(userData?.email || "").toLowerCase()) ||
+          members[0]
+        const otherMember =
+          members.find((member) => member !== selfMember) ||
+          null
+        const nextOwnName = selfMember?.name || ownName
+        const nextPartnerName = otherMember?.name || partnerName
+        setOwnName(nextOwnName)
+        setPartnerName(nextPartnerName)
+        setPersonNames({ eu: nextOwnName, parceiro: nextPartnerName })
       }
     } catch (error) {
       console.error("Erro ao carregar configuracoes:", error)
@@ -107,13 +182,45 @@ export function ConfiguracoesClient() {
   const handleSaveNames = async () => {
     if (!ownName.trim()) return
     setSavingNames(true)
+    setNameSaveError("")
     try {
-      const updatedUser = await authService.updateName(ownName.trim())
-      const nextOwnName = updatedUser?.name || ownName.trim()
+      const selfMember =
+        dashboardMembers.find((member) => member.userId === currentUserId) ||
+        dashboardMembers.find((member) => member.email?.toLowerCase() === currentUserEmail.toLowerCase()) ||
+        null
+      const payload = {
+        personNames: [
+          {
+            userId: selfMember?.userId || selfMember?.id || currentUserId || "self",
+            name: ownName.trim(),
+          },
+        ],
+      }
+      const updatedDashboard = await dashboardService.update(payload)
+      const apiNames = getNamesFromDashboardResponse(updatedDashboard)
+      const updatedMembers = getMembersFromDashboardResponse(updatedDashboard)
+      const updatedSelfMember =
+        updatedMembers.find((member) => member.userId === currentUserId) ||
+        updatedMembers.find((member) => member.email?.toLowerCase() === currentUserEmail.toLowerCase()) ||
+        null
+      const updatedPartnerMember =
+        updatedMembers.find((member) => member !== updatedSelfMember) ||
+        null
+      const nextOwnName = apiNames?.eu || updatedSelfMember?.name || ownName.trim()
+      const nextPartnerName = apiNames?.parceiro || updatedPartnerMember?.name || partnerName
+      setDashboardMembers(updatedMembers)
       setOwnName(nextOwnName)
-      setPersonNames({ eu: nextOwnName, parceiro: partnerName })
+      setPartnerName(nextPartnerName)
+      setPersonNames({ eu: nextOwnName, parceiro: nextPartnerName })
       setNamesSaved(true)
       setTimeout(() => setNamesSaved(false), 2000)
+    } catch (error) {
+      const status = (error as AxiosError)?.response?.status
+      if (status === 429) {
+        setNameSaveError("Você já alterou este nome nesta semana. Tente novamente em alguns dias.")
+      } else {
+        setNameSaveError("Não foi possível salvar o nome agora. Tente novamente.")
+      }
     } finally {
       setSavingNames(false)
     }
@@ -125,7 +232,9 @@ export function ConfiguracoesClient() {
     setInviteSent(false)
     try {
       const dashboard = await dashboardService.invite(inviteEmail.trim())
-      setHasPartnerJoined(hasPartnerFromDashboardResponse(dashboard))
+      const members = getMembersFromDashboardResponse(dashboard)
+      setDashboardMembers(members)
+      setHasPartnerJoined(hasPartnerFromDashboardResponse(dashboard) || members.length >= 2)
       const namesFromDashboard = getNamesFromDashboardResponse(dashboard)
       if (namesFromDashboard?.parceiro) {
         setPartnerName(namesFromDashboard.parceiro)
@@ -187,6 +296,57 @@ export function ConfiguracoesClient() {
     }
   }
 
+  if (loadingCategories) {
+    return (
+      <div className="flex flex-col gap-6 max-w-2xl">
+        <div>
+          <Skeleton className="h-8 w-52" />
+          <Skeleton className="h-4 w-72 mt-2" />
+        </div>
+        <div className="rounded-xl border border-border p-6">
+          <div className="flex items-center gap-3 mb-5">
+            <Skeleton className="w-9 h-9 rounded-lg" />
+            <div className="flex flex-col gap-2">
+              <Skeleton className="h-4 w-36" />
+              <Skeleton className="h-3 w-56" />
+            </div>
+          </div>
+          <div className="flex flex-col gap-4">
+            <Skeleton className="h-10 w-full" />
+            <Skeleton className="h-10 w-28" />
+          </div>
+        </div>
+        <div className="rounded-xl border border-border p-6">
+          <div className="flex items-center gap-3 mb-5">
+            <Skeleton className="w-9 h-9 rounded-lg" />
+            <div className="flex flex-col gap-2">
+              <Skeleton className="h-4 w-40" />
+              <Skeleton className="h-3 w-64" />
+            </div>
+          </div>
+          <div className="flex flex-col gap-3">
+            <Skeleton className="h-10 w-full" />
+            <Skeleton className="h-10 w-full" />
+          </div>
+        </div>
+        <div className="rounded-xl border border-border p-6">
+          <Skeleton className="h-4 w-48 mb-4" />
+          <Skeleton className="h-10 w-full mb-3" />
+          <Skeleton className="h-24 w-full" />
+        </div>
+        <div className="rounded-xl border border-border p-6">
+          <Skeleton className="h-4 w-44 mb-4" />
+          <Skeleton className="h-10 w-full mb-3" />
+          <Skeleton className="h-24 w-full" />
+        </div>
+        <div className="rounded-xl border border-border p-6">
+          <Skeleton className="h-4 w-56 mb-4" />
+          <Skeleton className="h-20 w-full" />
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div className="flex flex-col gap-6 max-w-2xl">
       <div>
@@ -196,15 +356,20 @@ export function ConfiguracoesClient() {
 
       <OwnNameCard
         ownName={ownName}
-        onChangeOwnName={setOwnName}
+        onChangeOwnName={(value) => {
+          setOwnName(value)
+          if (nameSaveError) setNameSaveError("")
+        }}
         onSaveOwnName={handleSaveNames}
         saved={namesSaved}
         saving={savingNames}
+        error={nameSaveError}
       />
 
       <InvitePartnerCard
         partnerName={partnerName}
         hasPartnerJoined={hasPartnerJoined}
+        members={dashboardMembers}
         inviteEmail={inviteEmail}
         onChangeInviteEmail={setInviteEmail}
         onInviteByEmail={handleInviteByEmail}

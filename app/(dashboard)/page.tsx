@@ -198,7 +198,7 @@ export default function DashboardPage() {
         <PersonChart data={people} totalExpenses={summary.totalExpenses} />
       )}
 
-      <RecentActivity expenses={recentExpenses} incomes={recentIncomes} categories={categories} />
+      <RecentActivity loading={loading} expenses={recentExpenses} incomes={recentIncomes} categories={categories} />
     </div>
   )
 }

@@ -1,6 +1,6 @@
 "use client"
 
-import React, { useState } from "react"
+import React, { useEffect, useState } from "react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import {
@@ -12,10 +12,12 @@ import {
   Settings,
   ChevronLeft,
   ChevronRight,
+  Lock,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { useFinance } from "@/lib/finance-context"
 import { Button } from "@/components/ui/button"
+import { dashboardService } from "@/services/financeService"
 
 const navItems = [
   { href: "/", label: "Painel", icon: LayoutDashboard },
@@ -37,6 +39,43 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const [collapsed, setCollapsed] = useState(false)
   const pathname = usePathname()
   const { viewMode, setViewMode, personNames } = useFinance()
+  const [canUseCoupleMode, setCanUseCoupleMode] = useState(false)
+
+  useEffect(() => {
+    let mounted = true
+    const checkDashboardMembers = async () => {
+      try {
+        const dashboardData = await dashboardService.get()
+        const record = (dashboardData || {}) as Record<string, unknown>
+        const users =
+          (Array.isArray(record.users) && record.users) ||
+          (Array.isArray(record.members) && record.members) ||
+          (Array.isArray(record.dashboardMembers) && record.dashboardMembers) ||
+          []
+        const hasPartner =
+          users.length >= 2 ||
+          (typeof record.partnerId === "string" && record.partnerId.trim().length > 0) ||
+          (typeof record.partnerEmail === "string" && record.partnerEmail.trim().length > 0)
+        if (mounted) {
+          setCanUseCoupleMode(hasPartner)
+          if (!hasPartner && viewMode === "casal") {
+            setViewMode("individual")
+          }
+        }
+      } catch {
+        if (mounted) {
+          setCanUseCoupleMode(false)
+          if (viewMode === "casal") {
+            setViewMode("individual")
+          }
+        }
+      }
+    }
+    checkDashboardMembers()
+    return () => {
+      mounted = false
+    }
+  }, [setViewMode, viewMode])
 
   return (
     <div className="flex h-dvh overflow-hidden bg-background">
@@ -71,14 +110,17 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           <div className="px-3 pb-3">
             <div className="flex rounded-lg bg-sidebar-accent p-1">
               <button
-                onClick={() => setViewMode("casal")}
+                onClick={() => canUseCoupleMode && setViewMode("casal")}
+                disabled={!canUseCoupleMode}
                 className={cn(
-                  "flex-1 text-xs py-1.5 px-2 rounded-md transition-all font-medium",
+                  "flex-1 text-xs py-1.5 px-2 rounded-md transition-all font-medium inline-flex items-center justify-center gap-1",
                   viewMode === "casal"
                     ? "bg-sidebar-primary text-sidebar-primary-foreground"
-                    : "text-sidebar-foreground hover:text-sidebar-primary-foreground"
+                    : "text-sidebar-foreground hover:text-sidebar-primary-foreground",
+                  !canUseCoupleMode && "opacity-60 cursor-not-allowed"
                 )}
               >
+                {!canUseCoupleMode && <Lock className="w-3 h-3" />}
                 Casal
               </button>
               <button
@@ -157,14 +199,17 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           <div className="flex items-center gap-2">
             <div className="flex rounded-lg bg-secondary p-0.5">
               <button
-                onClick={() => setViewMode("casal")}
+                onClick={() => canUseCoupleMode && setViewMode("casal")}
+                disabled={!canUseCoupleMode}
                 className={cn(
-                  "text-xs py-1 px-2.5 rounded-md transition-all font-medium",
+                  "text-xs py-1 px-2.5 rounded-md transition-all font-medium inline-flex items-center gap-1",
                   viewMode === "casal"
                     ? "bg-primary text-primary-foreground"
-                    : "text-muted-foreground"
+                    : "text-muted-foreground",
+                  !canUseCoupleMode && "opacity-60 cursor-not-allowed"
                 )}
               >
+                {!canUseCoupleMode && <Lock className="w-3 h-3" />}
                 Casal
               </button>
               <button
