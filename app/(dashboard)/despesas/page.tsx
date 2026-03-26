@@ -56,22 +56,7 @@ export default function DespesasPage() {
     await fetchData() // Refresh list
   }
 
-  const handleImportExpenses = async (expensesData: any[]) => {
-    // Process sequentially or in batches if API supports bulk
-    // Assuming backend might need one by one or we adapt service
-    // For now, let's assume we send one by one or create a bulk endpoint
-    // But expenseService.importCsv takes FormData.
-    // If CsvImport component parses CSV, we might need to change it to send FormData
-    // OR we loop and create. 
-    // The previous CsvImport implementation parsed it. 
-    // Let's adjust CsvImport to use expenseService.create in loop or use importCsv endpoint if we want to send file.
-    // The previous implementation in page.tsx used importCSV from context which took array.
-    // expenseService.create takes one.
-
-    // Let's loop for now as it's safer without bulk endpoint info
-    for (const expense of expensesData) {
-      await expenseService.create(expense, viewMode)
-    }
+  const handleImportExpenses = async () => {
     await fetchData()
   }
 
@@ -132,7 +117,7 @@ export default function DespesasPage() {
         </div>
       </div>
 
-      <CsvImport onImport={handleImportExpenses} />
+      <CsvImport onImported={handleImportExpenses} />
 
       <ExpenseFilters
         categories={categories}

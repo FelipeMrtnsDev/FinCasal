@@ -1,5 +1,5 @@
 import api from "@/lib/api";
-import { AxiosError } from "axios";
+import { AxiosError, AxiosProgressEvent } from "axios";
 import {
   Expense,
   Income,
@@ -80,6 +80,19 @@ export interface CreateSalePayload {
   date: string;
   personId?: string;
   scope?: DataScope;
+}
+
+export interface ExpenseCsvImportPayload {
+  file: File;
+  dashboardId: string;
+  scope?: DataScope;
+  onUploadProgress?: (progress: number) => void;
+}
+
+export interface ExpenseCsvImportResult {
+  importedCount: number;
+  processedRows: number;
+  chunks: number;
 }
 
 export interface SalesSummaryDTO {
@@ -234,10 +247,29 @@ export const expenseService = {
   delete: async (id: string): Promise<void> => {
     await api.delete(`/expenses/${id}`);
   },
-  importCsv: async (formData: FormData): Promise<any> => {
-    const response = await api.post("/expenses/import-csv", formData, {
+  importCsv: async ({
+    file,
+    dashboardId,
+    scope = "INDIVIDUAL",
+    onUploadProgress,
+  }: ExpenseCsvImportPayload): Promise<ExpenseCsvImportResult> => {
+    const formData = new FormData();
+    formData.append("file", file);
+    formData.append("dashboardId", dashboardId);
+    formData.append("scope", scope);
+
+    const response = await api.post<ExpenseCsvImportResult>(
+      "/expenses/import",
+      formData,
+      {
       headers: { "Content-Type": "multipart/form-data" },
-    });
+        onUploadProgress: (event: AxiosProgressEvent) => {
+          if (!onUploadProgress || !event.total) return;
+          const progress = Math.round((event.loaded * 100) / event.total);
+          onUploadProgress(progress);
+        },
+      },
+    );
     return response.data;
   },
 };
