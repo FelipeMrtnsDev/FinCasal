@@ -3,18 +3,27 @@
 import { useState } from "react"
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { Trash2, HelpCircle, CreditCard, Smartphone, Banknote, ArrowLeftRight, Loader2 } from "lucide-react"
+import { HelpCircle, CreditCard, Smartphone, Banknote, ArrowLeftRight } from "lucide-react"
 import { Expense, Category, PaymentMethod } from "@/lib/types"
 import { useFinance } from "@/lib/finance-context"
 import { format, parseISO } from "date-fns"
 import { Skeleton } from "@/components/ui/skeleton"
 import { ExpenseDetailsDialog } from "./ExpenseDetailsDialog"
+import { ExpenseEditDialog } from "./ExpenseEditDialog"
 
 interface ExpenseListProps {
   expenses: Expense[]
   categories: Category[]
   loading?: boolean
   onDelete: (id: string) => Promise<void>
+  onEdit: (id: string, payload: {
+    description?: string
+    amount?: number
+    date?: string
+    categoryId?: string | null
+    paymentMethod?: string
+    type?: string
+  }) => Promise<void>
 }
 
 const paymentIcons: Record<string, typeof CreditCard> = {
@@ -58,11 +67,13 @@ function formatCurrency(value: number) {
   return formatted;
 }
 
-export function ExpenseList({ expenses, categories, loading = false, onDelete }: ExpenseListProps) {
+export function ExpenseList({ expenses, categories, loading = false, onDelete, onEdit }: ExpenseListProps) {
   const { viewMode, personNames } = useFinance()
   const [selectedExpense, setSelectedExpense] = useState<Expense | null>(null)
   const [detailsOpen, setDetailsOpen] = useState(false)
   const [deletingId, setDeletingId] = useState<string | null>(null)
+  const [editingExpense, setEditingExpense] = useState<Expense | null>(null)
+  const [editOpen, setEditOpen] = useState(false)
 
   const handleExpenseClick = (expense: Expense) => {
     setSelectedExpense(expense)
@@ -74,9 +85,16 @@ export function ExpenseList({ expenses, categories, loading = false, onDelete }:
     setDeletingId(id)
     try {
       await onDelete(id)
+      setDetailsOpen(false)
     } finally {
       setDeletingId(null)
     }
+  }
+
+  const handleEditExpense = (expense: Expense) => {
+    setEditingExpense(expense)
+    setEditOpen(true)
+    setDetailsOpen(false)
   }
 
   const translateType = (type: string) => {
@@ -194,22 +212,6 @@ export function ExpenseList({ expenses, categories, loading = false, onDelete }:
                           {(() => { try { return format(parseISO(expense.date), "dd/MM/yyyy") } catch { return expense.date } })()}
                         </span>
                       </div>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="opacity-0 group-hover:opacity-100 transition-opacity h-8 w-8 text-muted-foreground hover:text-destructive"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleDeleteExpense(expense.id);
-                        }}
-                        disabled={deletingId === expense.id}
-                      >
-                        {deletingId === expense.id ? (
-                          <Loader2 className="w-4 h-4 animate-spin" />
-                        ) : (
-                          <Trash2 className="w-4 h-4" />
-                        )}
-                      </Button>
                     </div>
                   </div>
                 )
@@ -225,6 +227,17 @@ export function ExpenseList({ expenses, categories, loading = false, onDelete }:
         onOpenChange={setDetailsOpen}
         categories={categories}
         personNames={personNames}
+        onEditClick={() => selectedExpense && handleEditExpense(selectedExpense)}
+        onDeleteClick={() => selectedExpense && handleDeleteExpense(selectedExpense.id)}
+        isDeleting={!!deletingId && deletingId === selectedExpense?.id}
+      />
+
+      <ExpenseEditDialog
+        open={editOpen}
+        expense={editingExpense}
+        categories={categories}
+        onOpenChange={setEditOpen}
+        onSave={onEdit}
       />
     </>
   )

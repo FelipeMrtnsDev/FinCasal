@@ -7,6 +7,7 @@ import { CsvImport } from "@/components/expenses/CsvImport"
 import { ExpenseFilters } from "@/components/expenses/ExpenseFilters"
 import { ExpenseList } from "@/components/expenses/ExpenseList"
 import { Skeleton } from "@/components/ui/skeleton"
+import { Button } from "@/components/ui/button"
 import { expenseService, categoryService } from "@/services/financeService"
 import { Expense, Category } from "@/lib/types"
 
@@ -21,19 +22,29 @@ export default function DespesasPage() {
   const [filterCategory, setFilterCategory] = useState<string>("all")
   const [filterPayment, setFilterPayment] = useState<string>("all")
   const [filterPerson, setFilterPerson] = useState<string>("all")
+  const [page, setPage] = useState(1)
+  const [pageSize, setPageSize] = useState(40)
+  const [totalItems, setTotalItems] = useState(0)
+  const [totalPages, setTotalPages] = useState(1)
 
   // Fetch data from API
   const fetchData = async () => {
     setLoading(true)
     try {
+      const expenseParams: Record<string, string | number> = { page }
+      if (searchTerm.trim()) expenseParams.search = searchTerm.trim()
+      if (filterCategory !== "all") expenseParams.category = filterCategory
+      if (viewMode === "casal" && filterPerson !== "all") expenseParams.person = filterPerson
+
       const [expensesData, categoriesData] = await Promise.all([
-        expenseService.getAll({ view: viewMode }),
+        expenseService.getPage({ ...expenseParams, view: viewMode }),
         categoryService.getAll("EXPENSE")
       ])
-
-      console.log("Fetched expenses:", expensesData)
-      console.log("Fetched categories:", categoriesData)
-      setExpenses(expensesData)
+      setExpenses(expensesData.items || [])
+      setPage(expensesData.page || page)
+      setPageSize(expensesData.pageSize || 40)
+      setTotalItems(expensesData.totalItems || 0)
+      setTotalPages(expensesData.totalPages || 1)
       setCategories(categoriesData)
     } catch (error) {
       console.error("Failed to fetch data:", error)
@@ -44,7 +55,11 @@ export default function DespesasPage() {
 
   useEffect(() => {
     fetchData()
-  }, [viewMode])
+  }, [viewMode, page, searchTerm, filterCategory, filterPerson])
+
+  useEffect(() => {
+    setPage(1)
+  }, [viewMode, searchTerm, filterCategory, filterPayment, filterPerson])
 
   const handleAddExpense = async (expenseData: any) => {
     await expenseService.create(expenseData, viewMode)
@@ -56,6 +71,21 @@ export default function DespesasPage() {
     await fetchData() // Refresh list
   }
 
+  const handleEditExpense = async (
+    id: string,
+    payload: {
+      description?: string
+      amount?: number
+      date?: string
+      categoryId?: string | null
+      paymentMethod?: string
+      type?: string
+    }
+  ) => {
+    await expenseService.update(id, payload, viewMode)
+    await fetchData()
+  }
+
   const handleImportExpenses = async () => {
     await fetchData()
   }
@@ -63,22 +93,7 @@ export default function DespesasPage() {
   const filteredExpenses = useMemo(() => {
     return expenses
       .filter((e) => {
-        if (searchTerm && !e.description.toLowerCase().includes(searchTerm.toLowerCase())) return false
-
-        // Filtro de Categoria
-        if (filterCategory !== "all") {
-          // Tenta comparar com ID da categoria ou com o objeto category.id
-          const categoryId = e.categoryId || (typeof e.category === "string" ? e.category : e.category.id)
-          if (categoryId !== filterCategory) return false
-        }
-
-        // Filtro de Pagamento
         if (filterPayment !== "all") {
-          // Normaliza para comparação (backend retorna CREDIT_CARD, filtro usa cartao ou CREDIT_CARD dependendo do value)
-          // Vamos assumir que o value do select filterPayment já está alinhado com o que vem do backend OU precisamos normalizar
-          // O PAYMENT_METHODS no types.ts usa "pix", "cartao". O backend retorna "PIX", "CREDIT_CARD".
-          // Precisamos de um de-para reverso ou ajustar o filtro.
-
           const backendPaymentMap: Record<string, string> = {
             "pix": "PIX",
             "cartao": "CREDIT_CARD",
@@ -86,18 +101,13 @@ export default function DespesasPage() {
             "transferencia": "TRANSFER",
             "outro": "OTHER"
           };
-
           const expectedBackendValue = backendPaymentMap[filterPayment] || filterPayment;
-
-          // Compara com o valor do backend (ex: CREDIT_CARD) ou o valor original se não tiver no map
           if (e.paymentMethod !== expectedBackendValue && e.paymentMethod !== filterPayment) return false
         }
-
-        if (filterPerson !== "all" && e.person !== filterPerson) return false
         return true
       })
       .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
-  }, [expenses, searchTerm, filterCategory, filterPayment, filterPerson])
+  }, [expenses, filterPayment])
 
   return (
     <div className="flex flex-col gap-6 p-4 md:p-8 pt-6">
@@ -107,7 +117,7 @@ export default function DespesasPage() {
           <h1 className="text-2xl md:text-3xl font-bold text-foreground">Despesas</h1>
           <p className="text-muted-foreground text-sm mt-1">
             <span className="inline-flex items-center">
-              {loading && !contextLoaded ? <Skeleton className="h-4 w-8" /> : filteredExpenses.length}
+              {loading && !contextLoaded ? <Skeleton className="h-4 w-8" /> : totalItems}
             </span>{" "}
             despesas registradas
           </p>
@@ -136,7 +146,32 @@ export default function DespesasPage() {
         categories={categories}
         loading={loading}
         onDelete={handleDeleteExpense}
+        onEdit={handleEditExpense}
       />
+
+      <div className="flex items-center justify-between gap-3">
+        <p className="text-xs text-muted-foreground">
+          Página {page} de {totalPages} • {pageSize} por página
+        </p>
+        <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setPage((prev) => Math.max(1, prev - 1))}
+            disabled={loading || page <= 1}
+          >
+            Anterior
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setPage((prev) => Math.min(totalPages, prev + 1))}
+            disabled={loading || page >= totalPages}
+          >
+            Próxima
+          </Button>
+        </div>
+      </div>
     </div>
   )
 }

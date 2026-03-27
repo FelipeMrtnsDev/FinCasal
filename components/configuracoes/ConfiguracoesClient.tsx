@@ -11,6 +11,8 @@ import { CategoriesCard } from "./CategoriesCard"
 import { DataManagementCard } from "./DataManagementCard"
 import { Skeleton } from "@/components/ui/skeleton"
 import { AxiosError } from "axios"
+import { Button } from "@/components/ui/button"
+import { LogOut } from "lucide-react"
 
 function getNamesFromDashboardResponse(
   data: unknown
@@ -296,6 +298,11 @@ export function ConfiguracoesClient() {
     }
   }
 
+  const handleLogout = async () => {
+    await authService.logout()
+    window.location.href = "/login"
+  }
+
   if (loadingCategories) {
     return (
       <div className="flex flex-col gap-6 max-w-2xl">
@@ -413,6 +420,17 @@ export function ConfiguracoesClient() {
       />
 
       <DataManagementCard />
+
+      <div className="md:hidden mt-4 mb-8">
+        <Button 
+          variant="destructive" 
+          className="w-full gap-2" 
+          onClick={handleLogout}
+        >
+          <LogOut className="w-4 h-4" />
+          Sair da Conta
+        </Button>
+      </div>
     </div>
   )
 }

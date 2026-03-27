@@ -13,11 +13,13 @@ import {
   ChevronLeft,
   ChevronRight,
   Lock,
+  LogOut,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { useFinance } from "@/lib/finance-context"
 import { Button } from "@/components/ui/button"
 import { dashboardService } from "@/services/financeService"
+import { authService } from "@/services/authService"
 
 const navItems = [
   { href: "/", label: "Painel", icon: LayoutDashboard },
@@ -40,8 +42,19 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
   const { viewMode, setViewMode, personNames } = useFinance()
   const [canUseCoupleMode, setCanUseCoupleMode] = useState(false)
+  const [isLoggedOut, setIsLoggedOut] = useState(false)
 
   useEffect(() => {
+    // Basic check for token existence on mount
+    const tokenFromStorage = localStorage.getItem("token");
+    const tokenFromCookie = document.cookie
+      .split("; ")
+      .find((cookie) => cookie.startsWith("auth_token="));
+
+    if (!tokenFromStorage && !tokenFromCookie) {
+      setIsLoggedOut(true);
+    }
+
     let mounted = true
     const checkDashboardMembers = async () => {
       try {
@@ -62,7 +75,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             setViewMode("individual")
           }
         }
-      } catch {
+      } catch (error: any) {
+        if (error?.response?.status === 401 || error?.response?.status === 403) {
+          if (mounted) setIsLoggedOut(true);
+        }
         if (mounted) {
           setCanUseCoupleMode(false)
           if (viewMode === "casal") {
@@ -71,11 +87,37 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         }
       }
     }
-    checkDashboardMembers()
+    if (!isLoggedOut) {
+      checkDashboardMembers()
+    }
     return () => {
       mounted = false
     }
-  }, [setViewMode, viewMode])
+  }, [setViewMode, viewMode, isLoggedOut])
+
+  const handleLogout = async () => {
+    await authService.logout()
+    window.location.href = "/login"
+  }
+
+  if (isLoggedOut) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-dvh bg-background p-4 text-center">
+        <div className="w-16 h-16 rounded-full bg-muted flex items-center justify-center mb-4">
+          <Lock className="w-8 h-8 text-muted-foreground" />
+        </div>
+        <h2 className="text-2xl font-bold text-foreground mb-2">Acesso Restrito</h2>
+        <p className="text-muted-foreground text-sm max-w-sm mb-6">
+          Você precisa estar logado para acessar esta página. Por favor, faça login para continuar.
+        </p>
+        <Link href="/login">
+          <Button size="lg" className="px-8">
+            Ir para o Login
+          </Button>
+        </Link>
+      </div>
+    )
+  }
 
   return (
     <div className="flex h-dvh overflow-hidden bg-background">
@@ -161,7 +203,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           })}
 
           {/* Settings link - separated at the bottom of nav */}
-          <div className="mt-auto">
+          <div className="mt-auto flex flex-col gap-1">
             <Link
               href="/configuracoes"
               className={cn(
@@ -174,6 +216,14 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               <Settings className="w-5 h-5 shrink-0" />
               {!collapsed && <span>Configuracoes</span>}
             </Link>
+
+            <button
+              onClick={handleLogout}
+              className="flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors text-destructive/70 hover:text-destructive hover:bg-destructive/10"
+            >
+              <LogOut className="w-5 h-5 shrink-0" />
+              {!collapsed && <span>Sair</span>}
+            </button>
           </div>
         </nav>
 

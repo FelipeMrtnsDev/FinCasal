@@ -115,6 +115,14 @@ export interface SalesByProductDTO {
   profitPerUnit: number;
 }
 
+export interface PaginatedExpensesResponse {
+  items: Expense[];
+  page: number;
+  pageSize: number;
+  totalItems: number;
+  totalPages: number;
+}
+
 const isBadRequest = (error: unknown): boolean =>
   error instanceof AxiosError
     ? error.response?.status === 400
@@ -189,6 +197,53 @@ const normalizeCategoryList = (
     .filter((item): item is Category => item !== null);
 };
 
+const normalizePaginatedExpenses = (
+  data: unknown,
+  fallbackPage: number,
+): PaginatedExpensesResponse => {
+  if (Array.isArray(data)) {
+    return {
+      items: data as Expense[],
+      page: fallbackPage,
+      pageSize: data.length,
+      totalItems: data.length,
+      totalPages: 1,
+    };
+  }
+
+  if (!data || typeof data !== "object") {
+    return {
+      items: [],
+      page: fallbackPage,
+      pageSize: 40,
+      totalItems: 0,
+      totalPages: 1,
+    };
+  }
+
+  const record = data as Record<string, unknown>;
+  const items = Array.isArray(record.items) ? (record.items as Expense[]) : [];
+  return {
+    items,
+    page:
+      typeof record.page === "number" && record.page > 0
+        ? record.page
+        : fallbackPage,
+    pageSize:
+      typeof record.pageSize === "number" && record.pageSize > 0
+        ? record.pageSize
+        : 40,
+    totalItems:
+      typeof record.totalItems === "number" && record.totalItems >= 0
+        ? record.totalItems
+        : items.length,
+    totalPages:
+      typeof record.totalPages === "number" && record.totalPages > 0
+        ? record.totalPages
+        : 1,
+  };
+};
+
 let dashboardCheckCache: { checkedAt: number; hasDashboard: boolean } | null =
   null;
 
@@ -212,36 +267,74 @@ const hasDashboardMembership = async (): Promise<boolean> => {
 };
 
 export const expenseService = {
-  getAll: async (params?: {
+  getPage: async (params?: {
     view?: DataScope | ViewMode;
+    page?: number;
     [key: string]: any;
-  }): Promise<Expense[]> => {
-    if (!(await hasDashboardMembership())) return [];
-    const { limit, view, ...rest } = params || {};
-    const scopedParams = { ...rest, view: toDataScope(view) };
+  }): Promise<PaginatedExpensesResponse> => {
+    if (!(await hasDashboardMembership()))
+      return {
+        items: [],
+        page: 1,
+        pageSize: 40,
+        totalItems: 0,
+        totalPages: 1,
+      };
+    const { view, page = 1, ...rest } = params || {};
+    const scopedParams = { ...rest, page, view: toDataScope(view) };
     let response;
     try {
-      response = await api.get<Expense[]>("/expenses", {
+      response = await api.get<unknown>("/expenses", {
         params: scopedParams,
       });
     } catch {
       try {
-        response = await api.get<Expense[]>("/expenses", { params: rest });
+        response = await api.get<unknown>("/expenses", {
+          params: { ...rest, page },
+        });
       } catch (error) {
         if (!isBadRequest(error)) throw error;
-        response = await api.get<Expense[]>("/expenses");
+        response = await api.get<unknown>("/expenses", { params: { page } });
       }
     }
+    return normalizePaginatedExpenses(response.data, page);
+  },
 
-    if (limit && Array.isArray(response.data)) {
-      return response.data.slice(0, limit);
+  getAll: async (params?: {
+    view?: DataScope | ViewMode;
+    [key: string]: any;
+  }): Promise<Expense[]> => {
+    const { limit, view, ...rest } = params || {};
+    const pageData = await expenseService.getPage({
+      ...rest,
+      view,
+      page: typeof rest.page === "number" ? rest.page : 1,
+    });
+    if (limit && Array.isArray(pageData.items)) {
+      return pageData.items.slice(0, limit);
     }
-
-    return response.data;
+    return pageData.items;
   },
   create: async (data: any, view?: DataScope | ViewMode): Promise<Expense> => {
     const payload = { ...data, scope: toDataScope(view) };
     const response = await api.post<Expense>("/expenses", payload);
+    return response.data;
+  },
+  update: async (
+    id: string,
+    data: {
+      description?: string;
+      amount?: number;
+      date?: string;
+      categoryId?: string | null;
+      paymentMethod?: string;
+      type?: string;
+      scope?: DataScope;
+    },
+    view?: DataScope | ViewMode,
+  ): Promise<Expense> => {
+    const payload = { ...data, scope: data.scope || toDataScope(view) };
+    const response = await api.put<Expense>(`/expenses/${id}`, payload);
     return response.data;
   },
   delete: async (id: string): Promise<void> => {
@@ -262,7 +355,7 @@ export const expenseService = {
       "/expenses/import",
       formData,
       {
-      headers: { "Content-Type": "multipart/form-data" },
+        headers: { "Content-Type": "multipart/form-data" },
         onUploadProgress: (event: AxiosProgressEvent) => {
           if (!onUploadProgress || !event.total) return;
           const progress = Math.round((event.loaded * 100) / event.total);
