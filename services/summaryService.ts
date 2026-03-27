@@ -30,6 +30,7 @@ export interface MonthlyEvolution {
 }
 
 export interface CategoryData {
+  categoryId?: string;
   name: string;
   value: number;
   color: string;
@@ -79,7 +80,11 @@ const monthToken = (monthDate: Date): string => format(monthDate, "yyyy-MM");
 
 const parseMonthToken = (value?: string): Date | null => {
   if (!value || !/^\d{4}-\d{2}$/.test(value)) return null;
-  return new Date(`${value}-01`);
+  const [yearRaw, monthRaw] = value.split("-");
+  const year = Number(yearRaw);
+  const monthIndex = Number(monthRaw) - 1;
+  if (!Number.isInteger(year) || !Number.isInteger(monthIndex)) return null;
+  return new Date(year, monthIndex, 1);
 };
 
 const toDataScope = (view?: DataScope | ViewMode): DataScope => {
@@ -225,7 +230,7 @@ function normalizeEvolutionRows(
     const saldo = toNumber(record.saldo ?? record.balance ?? renda - despesas);
 
     monthMap.set(token, {
-      month: monthLabel(new Date(`${token}-01`)),
+      month: monthLabel(parseMonthToken(token) || new Date()),
       renda,
       despesas,
       saldo,
@@ -312,24 +317,100 @@ function normalizePaymentMethodRows(data: unknown): PaymentMethodData[] {
 
 function normalizeCategoryRows(data: unknown): CategoryData[] {
   if (!Array.isArray(data)) return [];
-  return data
-    .map((item, index) => {
-      if (!item || typeof item !== "object") return null;
-      const record = item as Record<string, unknown>;
-      const name =
-        (typeof record.name === "string" && record.name) ||
-        (typeof record.category === "string" && record.category) ||
-        "Outros";
-      const value = toNumber(record.value ?? record.amount ?? record.total);
-      const color =
-        (typeof record.color === "string" && record.color) ||
-        ["#21C25E", "#15803d", "#4ade80", "#166534", "#86efac"][index % 5];
-      return { name, value, color };
-    })
-    .filter(
-      (row): row is CategoryData =>
-        row !== null && Number.isFinite(row.value) && row.value > 0,
+  const palette = ["#21C25E", "#15803d", "#4ade80", "#166534", "#86efac"];
+  const grouped = new Map<
+    string,
+    { categoryId?: string; name: string; value: number; color?: string }
+  >();
+
+  for (const item of data) {
+    if (!item || typeof item !== "object") continue;
+    const record = item as Record<string, unknown>;
+    const categoryField =
+      record.category && typeof record.category === "object"
+        ? (record.category as Record<string, unknown>)
+        : null;
+
+    const name =
+      (typeof record.name === "string" && record.name.trim()) ||
+      (typeof record.categoryName === "string" && record.categoryName.trim()) ||
+      (typeof record.label === "string" && record.label.trim()) ||
+      (typeof record.category === "string" && record.category.trim()) ||
+      (typeof categoryField?.name === "string" && categoryField.name.trim()) ||
+      (typeof categoryField?.label === "string" &&
+        categoryField.label.trim()) ||
+      "Outros";
+    const categoryId =
+      (typeof record.categoryId === "string" && record.categoryId.trim()) ||
+      (typeof categoryField?.id === "string" && categoryField.id.trim()) ||
+      undefined;
+
+    const value = toNumber(
+      record.value ??
+        record.amount ??
+        record.total ??
+        record.totalAmount ??
+        record.expenseTotal,
     );
+    if (!Number.isFinite(value) || value <= 0) continue;
+
+    const color =
+      (typeof record.color === "string" && record.color) ||
+      (typeof categoryField?.color === "string" && categoryField.color) ||
+      undefined;
+
+    const key = categoryId || name.toLowerCase();
+    const previous = grouped.get(key);
+    grouped.set(key, {
+      categoryId: previous?.categoryId || categoryId,
+      name,
+      value: (previous?.value || 0) + value,
+      color: previous?.color || color,
+    });
+  }
+
+  return Array.from(grouped.values()).map((dataRow, index) => ({
+    categoryId: dataRow.categoryId,
+    name: dataRow.name,
+    value: dataRow.value,
+    color: dataRow.color || palette[index % palette.length],
+  }));
+}
+
+type CategoryColorEntry = {
+  id?: string;
+  name: string;
+  color?: string;
+};
+
+async function getExpenseCategories(): Promise<CategoryColorEntry[]> {
+  try {
+    const data = await getWithFallback<unknown>(["/categories"], {
+      type: "EXPENSE",
+    });
+    const list = Array.isArray(data)
+      ? data
+      : data && typeof data === "object"
+        ? ((data as Record<string, unknown>).items as unknown)
+        : [];
+    if (!Array.isArray(list)) return [];
+    const parsed: CategoryColorEntry[] = [];
+    for (const item of list) {
+      if (!item || typeof item !== "object") continue;
+      const record = item as Record<string, unknown>;
+      const id =
+        (typeof record.id === "string" && record.id.trim()) || undefined;
+      const name =
+        (typeof record.name === "string" && record.name.trim()) || "";
+      const color =
+        (typeof record.color === "string" && record.color.trim()) || undefined;
+      if (!name) continue;
+      parsed.push({ id, name, color });
+    }
+    return parsed;
+  } catch {
+    return [];
+  }
 }
 
 function normalizePersonRows(data: unknown): PersonData[] {
@@ -366,7 +447,7 @@ type RawExpense = {
   paymentMethod?: string;
   type?: string;
   person?: string;
-  category?: string | { name?: string };
+  category?: string | { id?: string; name?: string; color?: string };
   categoryData?: { name?: string; color?: string };
 };
 
@@ -411,14 +492,21 @@ const buildWindowMonths = (baseMonth?: string, startMonth?: string): Date[] => {
   return Array.from({ length: 6 }, (_, i) => addMonths(windowStart, i));
 };
 
-async function getExpensesRaw(view?: DataScope | ViewMode): Promise<RawExpense[]> {
-  const data = await getWithFallback<RawExpense[]>(["/expenses"], {
+async function getExpensesRaw(
+  view?: DataScope | ViewMode,
+): Promise<RawExpense[]> {
+  const data = await getWithFallback<unknown>(["/expenses"], {
     view: toDataScope(view),
   });
-  return Array.isArray(data) ? data : [];
+  if (Array.isArray(data)) return data as RawExpense[];
+  if (!data || typeof data !== "object") return [];
+  const record = data as Record<string, unknown>;
+  return Array.isArray(record.items) ? (record.items as RawExpense[]) : [];
 }
 
-async function getIncomesRaw(view?: DataScope | ViewMode): Promise<RawIncome[]> {
+async function getIncomesRaw(
+  view?: DataScope | ViewMode,
+): Promise<RawIncome[]> {
   const data = await getWithFallback<RawIncome[]>(["/incomes"], {
     view: toDataScope(view),
   });
@@ -558,7 +646,28 @@ export const summaryService = {
         ["/summary/by-category", "/dashboard/by-category"],
         params,
       );
-      return normalizeCategoryRows(data);
+      const normalized = normalizeCategoryRows(data);
+      if (normalized.length === 0) return normalized;
+      const categories = await getExpenseCategories();
+      if (categories.length === 0) return normalized;
+
+      const byId = new Map<string, string>();
+      const byName = new Map<string, string>();
+      for (const category of categories) {
+        if (category.id && category.color)
+          byId.set(category.id, category.color);
+        if (category.name && category.color) {
+          byName.set(category.name.trim().toLowerCase(), category.color);
+        }
+      }
+
+      return normalized.map((row) => ({
+        ...row,
+        color:
+          (row.categoryId ? byId.get(row.categoryId) : undefined) ||
+          byName.get(row.name.trim().toLowerCase()) ||
+          row.color,
+      }));
     } catch (error) {
       console.error("Erro ao buscar categorias", error);
       try {
@@ -566,22 +675,51 @@ export const summaryService = {
         const monthExpenses = expenses.filter((expense) =>
           isFromMonth(expense.date, month),
         );
-        const grouped = new Map<string, number>();
+        const grouped = new Map<
+          string,
+          { name: string; value: number; color?: string }
+        >();
         for (const item of monthExpenses) {
+          const categoryObject =
+            item.category && typeof item.category === "object"
+              ? item.category
+              : null;
+          const nameFromCategoryData = item.categoryData?.name;
+          const nameFromCategoryObject = categoryObject?.name;
+          const nameFromCategoryString =
+            typeof item.category === "string" ? item.category : undefined;
           const name =
-            item.categoryData?.name ||
-            (typeof item.category === "object"
-              ? item.category?.name
-              : item.category) ||
+            nameFromCategoryData ||
+            nameFromCategoryObject ||
+            nameFromCategoryString ||
             "Outros";
-          grouped.set(name, (grouped.get(name) || 0) + toNumber(item.amount));
+          const color =
+            item.categoryData?.color ||
+            (categoryObject ? categoryObject.color : undefined);
+          const key = name.toLowerCase();
+          const previous = grouped.get(key);
+          grouped.set(key, {
+            name,
+            value: (previous?.value || 0) + toNumber(item.amount),
+            color: previous?.color || color,
+          });
         }
-        return Array.from(grouped.entries()).map(([name, value], index) => ({
-          name,
-          value,
-          color: ["#21C25E", "#15803d", "#4ade80", "#166534", "#86efac"][
-            index % 5
-          ],
+        const categories = await getExpenseCategories();
+        const byName = new Map(
+          categories
+            .filter((category) => category.color)
+            .map((category) => [
+              category.name.trim().toLowerCase(),
+              category.color as string,
+            ]),
+        );
+        return Array.from(grouped.values()).map((item, index) => ({
+          name: item.name,
+          value: item.value,
+          color:
+            item.color ||
+            byName.get(item.name.trim().toLowerCase()) ||
+            ["#21C25E", "#15803d", "#4ade80", "#166534", "#86efac"][index % 5],
         }));
       } catch {
         return [];

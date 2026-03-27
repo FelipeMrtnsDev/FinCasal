@@ -56,11 +56,7 @@ export function IncomeDialog({ onAdd }: IncomeDialogProps) {
 
     setLoading(true)
     try {
-      // Formatar data para ISO 8601 completo (com hora)
-      const dateObj = new Date(form.date);
-      const now = new Date();
-      dateObj.setHours(now.getHours(), now.getMinutes(), now.getSeconds());
-      const isoDate = dateObj.toISOString();
+      const isoDate = `${form.date}T12:00:00.000Z`
 
       await onAdd({
         description: form.description,

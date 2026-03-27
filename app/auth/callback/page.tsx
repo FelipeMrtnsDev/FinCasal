@@ -12,10 +12,11 @@ function CallbackContent() {
 
   useEffect(() => {
     const token = searchParams.get("token")
+    const redirectTo = searchParams.get("next")
     if (token) {
       localStorage.setItem("token", token)
       document.cookie = `${AUTH_COOKIE}=${encodeURIComponent(token)}; path=/; max-age=2592000; samesite=lax`
-      router.push("/")
+      router.push(redirectTo || "/")
     } else {
       router.push("/login")
     }

@@ -83,13 +83,7 @@ export function ExpenseDialog({ categories, onAdd }: ExpenseDialogProps) {
         variavel: "VARIABLE"
       }[form.type] || "VARIABLE";
 
-      // Formatar data para ISO 8601 completo (com hora)
-      // O backend espera algo como: 2026-03-10T15:30:00.000Z
-      const dateObj = new Date(form.date);
-      // Adiciona hora atual para não ficar sempre 00:00
-      const now = new Date();
-      dateObj.setHours(now.getHours(), now.getMinutes(), now.getSeconds());
-      const isoDate = dateObj.toISOString();
+      const isoDate = `${form.date}T12:00:00.000Z`
 
       await onAdd({
         description: form.description,

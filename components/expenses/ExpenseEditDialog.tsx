@@ -52,6 +52,16 @@ const toFrontType = (value?: string): ExpenseType => {
   return "variavel"
 }
 
+const toDateInputValue = (value?: string): string => {
+  if (!value) return ""
+  if (/^\d{4}-\d{2}-\d{2}/.test(value)) return value.slice(0, 10)
+  try {
+    return format(new Date(value), "yyyy-MM-dd")
+  } catch {
+    return ""
+  }
+}
+
 export function ExpenseEditDialog({
   open,
   expense,
@@ -80,13 +90,7 @@ export function ExpenseEditDialog({
     setForm({
       description: expense.description || "",
       amount: String(expense.amount || ""),
-      date: (() => {
-        try {
-          return format(new Date(expense.date), "yyyy-MM-dd")
-        } catch {
-          return ""
-        }
-      })(),
+      date: toDateInputValue(expense.date),
       categoryId,
       paymentMethod: toFrontPaymentMethod(String(expense.paymentMethod || "")),
       type: toFrontType(String(expense.type || "")),
@@ -114,18 +118,9 @@ export function ExpenseEditDialog({
       if (form.description.trim() !== expense.description) payload.description = form.description.trim()
       if (Number(form.amount) !== Number(expense.amount)) payload.amount = Number(form.amount)
 
-      const currentDate = (() => {
-        try {
-          return format(new Date(expense.date), "yyyy-MM-dd")
-        } catch {
-          return ""
-        }
-      })()
+      const currentDate = toDateInputValue(expense.date)
       if (form.date && form.date !== currentDate) {
-        const dateObj = new Date(form.date)
-        const now = new Date()
-        dateObj.setHours(now.getHours(), now.getMinutes(), now.getSeconds())
-        payload.date = dateObj.toISOString()
+        payload.date = `${form.date}T12:00:00.000Z`
       }
 
       const currentCategoryId =
@@ -241,4 +236,3 @@ export function ExpenseEditDialog({
     </Dialog>
   )
 }
-

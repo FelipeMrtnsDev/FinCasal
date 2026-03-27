@@ -123,6 +123,42 @@ export interface PaginatedExpensesResponse {
   totalPages: number;
 }
 
+export type BillingPlanId = "INDIVIDUAL" | "COUPLE";
+export type BillingCheckoutMethod = "PIX" | "CARD";
+
+export interface BillingPlan {
+  id: BillingPlanId;
+  name: string;
+  description: string;
+  price: number;
+  currency: string;
+  interval: string;
+}
+
+export interface BillingCheckoutCustomer {
+  name?: string;
+  cellphone?: string;
+  email?: string;
+  taxId?: string;
+}
+
+export interface BillingCheckoutPayload {
+  dashboardId: string;
+  planId: BillingPlanId;
+  returnUrl: string;
+  completionUrl: string;
+  methods?: BillingCheckoutMethod[];
+  customerId?: string;
+  customer?: BillingCheckoutCustomer;
+}
+
+export interface BillingCheckoutResponse {
+  id?: string;
+  url: string;
+  status?: string;
+  [key: string]: unknown;
+}
+
 const isBadRequest = (error: unknown): boolean =>
   error instanceof AxiosError
     ? error.response?.status === 400
@@ -130,6 +166,13 @@ const isBadRequest = (error: unknown): boolean =>
       error !== null &&
       "response" in error &&
       (error as { response?: { status?: number } }).response?.status === 400;
+
+const toNumber = (value: unknown): number =>
+  typeof value === "number"
+    ? value
+    : typeof value === "string"
+      ? Number(value) || 0
+      : 0;
 
 const getErrorMessage = (error: unknown): string => {
   if (error instanceof AxiosError) {
@@ -553,6 +596,65 @@ export const dashboardService = {
   update: async (data: any): Promise<any> => {
     const response = await api.patch("/dashboard", data);
     return response.data;
+  },
+};
+
+export const billingService = {
+  getPlans: async (dashboardId: string): Promise<BillingPlan[]> => {
+    const response = await api.get<unknown>("/billing/plans", {
+      params: { dashboardId },
+    });
+    const data = response.data;
+    if (!Array.isArray(data)) return [];
+    return data
+      .map((item) => {
+        if (!item || typeof item !== "object") return null;
+        const record = item as Record<string, unknown>;
+        const id =
+          record.id === "INDIVIDUAL" || record.id === "COUPLE"
+            ? record.id
+            : null;
+        if (!id) return null;
+        return {
+          id,
+          name: typeof record.name === "string" ? record.name : id,
+          description:
+            typeof record.description === "string" ? record.description : "",
+          price: toNumber(record.price),
+          currency:
+            typeof record.currency === "string" ? record.currency : "BRL",
+          interval:
+            typeof record.interval === "string" ? record.interval : "month",
+        } as BillingPlan;
+      })
+      .filter((item): item is BillingPlan => item !== null);
+  },
+
+  createPlanCheckout: async (
+    payload: BillingCheckoutPayload,
+  ): Promise<BillingCheckoutResponse> => {
+    const response = await api.post<unknown>("/billing/checkout/plan", payload);
+    const data = response.data;
+    if (!data || typeof data !== "object") {
+      throw new Error("Resposta inválida do checkout.");
+    }
+    const record = data as Record<string, unknown>;
+    const url =
+      (typeof record.url === "string" && record.url) ||
+      (record.data &&
+      typeof record.data === "object" &&
+      typeof (record.data as Record<string, unknown>).url === "string"
+        ? ((record.data as Record<string, unknown>).url as string)
+        : "");
+    if (!url) {
+      throw new Error("Checkout sem URL de redirecionamento.");
+    }
+    return {
+      ...record,
+      url,
+      id: typeof record.id === "string" ? record.id : undefined,
+      status: typeof record.status === "string" ? record.status : undefined,
+    };
   },
 };
 

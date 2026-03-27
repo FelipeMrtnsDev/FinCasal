@@ -6,9 +6,11 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Eye, EyeOff, ArrowRight, Loader2 } from "lucide-react"
 import { motion } from "framer-motion"
+import { useSearchParams } from "next/navigation"
 import { authService } from "@/services/authService"
 
 export function RegisterForm() {
+  const searchParams = useSearchParams()
   const [showPassword, setShowPassword] = useState(false)
   const [showConfirmPassword, setShowConfirmPassword] = useState(false)
   const [loading, setLoading] = useState(false)
@@ -38,7 +40,8 @@ export function RegisterForm() {
         email: form.email,
         password: form.password,
       })
-      window.location.href = "/"
+      const redirectTo = searchParams.get("next")
+      window.location.href = redirectTo || "/"
     } catch (err: any) {
       console.error(err)
       setError(err.response?.data?.message || "Erro ao criar conta")

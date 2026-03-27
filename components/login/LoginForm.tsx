@@ -6,9 +6,11 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Eye, EyeOff, ArrowRight, Loader2 } from "lucide-react"
 import { motion } from "framer-motion"
+import { useSearchParams } from "next/navigation"
 import { authService } from "@/services/authService"
 
 export function LoginForm() {
+  const searchParams = useSearchParams()
   const [showPassword, setShowPassword] = useState(false)
   const [loading, setLoading] = useState(false)
   const [form, setForm] = useState({ email: "", password: "" })
@@ -25,7 +27,8 @@ export function LoginForm() {
 
     try {
       await authService.login(form)
-      window.location.href = "/"
+      const redirectTo = searchParams.get("next")
+      window.location.href = redirectTo || "/"
     } catch (err: any) {
       console.error(err)
       setError(err.response?.data?.message || "Erro ao realizar login")
