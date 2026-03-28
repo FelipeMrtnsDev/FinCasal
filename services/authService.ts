@@ -1,17 +1,6 @@
 import api from "@/lib/api";
 import { AuthResponse, User } from "@/lib/types";
-
-const AUTH_COOKIE = "auth_token";
-
-function persistToken(token: string) {
-  localStorage.setItem("token", token);
-  document.cookie = `${AUTH_COOKIE}=${encodeURIComponent(token)}; path=/; max-age=2592000; samesite=lax`;
-}
-
-function clearToken() {
-  localStorage.removeItem("token");
-  document.cookie = `${AUTH_COOKIE}=; path=/; max-age=0; samesite=lax`;
-}
+import { authSession } from "@/lib/authSession";
 
 export const authService = {
   register: async (data: {
@@ -20,9 +9,6 @@ export const authService = {
     password: string;
   }): Promise<AuthResponse> => {
     const response = await api.post<AuthResponse>("/auth/register", data);
-    if (response.data.token) {
-      persistToken(response.data.token);
-    }
     return response.data;
   },
 
@@ -31,9 +17,6 @@ export const authService = {
     password: string;
   }): Promise<AuthResponse> => {
     const response = await api.post<AuthResponse>("/auth/login", data);
-    if (response.data.token) {
-      persistToken(response.data.token);
-    }
     return response.data;
   },
 
@@ -41,9 +24,21 @@ export const authService = {
     const response = await api.post<AuthResponse>("/auth/google", {
       googleIdToken,
     });
-    if (response.data.token) {
-      persistToken(response.data.token);
-    }
+    return response.data;
+  },
+
+  exchangeOnboardingToken: async (
+    onboardingToken: string,
+  ): Promise<AuthResponse> => {
+    const response = await api.post<AuthResponse>(
+      "/auth/onboarding/exchange-token",
+      {},
+      {
+        headers: {
+          Authorization: `Bearer ${onboardingToken}`,
+        },
+      },
+    );
     return response.data;
   },
 
@@ -53,7 +48,8 @@ export const authService = {
     } catch (error) {
       console.error("Logout failed", error);
     } finally {
-      clearToken();
+      authSession.clearFinalToken();
+      authSession.clearOnboardingSession();
     }
   },
 

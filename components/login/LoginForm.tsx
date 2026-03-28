@@ -8,6 +8,7 @@ import { Eye, EyeOff, ArrowRight, Loader2 } from "lucide-react"
 import { motion } from "framer-motion"
 import { useSearchParams } from "next/navigation"
 import { authService } from "@/services/authService"
+import { authSession } from "@/lib/authSession"
 
 export function LoginForm() {
   const searchParams = useSearchParams()
@@ -26,9 +27,28 @@ export function LoginForm() {
     setLoading(true)
 
     try {
-      await authService.login(form)
-      const redirectTo = searchParams.get("next")
-      window.location.href = redirectTo || "/"
+      const response = await authService.login(form)
+      const flow = authSession.resolveAuthFlow(response)
+
+      if (flow.kind === "final") {
+        authSession.persistFinalToken(flow.token)
+        localStorage.removeItem("payment_required")
+        const redirectTo = searchParams.get("next")
+        window.location.href = redirectTo || "/"
+        return
+      }
+
+      if (flow.kind === "onboarding") {
+        authSession.persistOnboardingSession({
+          onboardingToken: flow.onboardingToken,
+          dashboardId: flow.dashboardId,
+          user: flow.user,
+        })
+        window.location.href = "/plans"
+        return
+      }
+
+      setError("Não foi possível iniciar sua sessão")
     } catch (err: any) {
       console.error(err)
       setError(err.response?.data?.message || "Erro ao realizar login")

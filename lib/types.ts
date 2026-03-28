@@ -120,6 +120,10 @@ export interface User {
 }
 
 export interface AuthResponse {
-  user: User;
-  token: string;
+  user?: User;
+  token?: string;
+  paymentRequired?: boolean;
+  onboardingToken?: string;
+  dashboardId?: string;
+  [key: string]: unknown;
 }

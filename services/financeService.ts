@@ -159,6 +159,19 @@ export interface BillingCheckoutResponse {
   [key: string]: unknown;
 }
 
+export interface BillingConfirmPaymentResponse {
+  success?: boolean;
+  status?: string;
+  [key: string]: unknown;
+}
+
+export interface BillingSubscription {
+  id?: string;
+  status?: string;
+  planId?: BillingPlanId | string;
+  [key: string]: unknown;
+}
+
 const isBadRequest = (error: unknown): boolean =>
   error instanceof AxiosError
     ? error.response?.status === 400
@@ -600,9 +613,17 @@ export const dashboardService = {
 };
 
 export const billingService = {
-  getPlans: async (dashboardId: string): Promise<BillingPlan[]> => {
+  getPlans: async (
+    dashboardId: string,
+    authToken?: string,
+  ): Promise<BillingPlan[]> => {
     const response = await api.get<unknown>("/billing/plans", {
       params: { dashboardId },
+      headers: authToken
+        ? {
+            Authorization: `Bearer ${authToken}`,
+          }
+        : undefined,
     });
     const data = response.data;
     if (!Array.isArray(data)) return [];
@@ -632,8 +653,19 @@ export const billingService = {
 
   createPlanCheckout: async (
     payload: BillingCheckoutPayload,
+    authToken?: string,
   ): Promise<BillingCheckoutResponse> => {
-    const response = await api.post<unknown>("/billing/checkout/plan", payload);
+    const response = await api.post<unknown>(
+      "/billing/checkout/plan",
+      payload,
+      {
+        headers: authToken
+          ? {
+              Authorization: `Bearer ${authToken}`,
+            }
+          : undefined,
+      },
+    );
     const data = response.data;
     if (!data || typeof data !== "object") {
       throw new Error("Resposta inválida do checkout.");
@@ -655,6 +687,43 @@ export const billingService = {
       id: typeof record.id === "string" ? record.id : undefined,
       status: typeof record.status === "string" ? record.status : undefined,
     };
+  },
+
+  confirmCheckoutPayment: async (
+    checkoutId: string,
+    payload: { dashboardId: string },
+    authToken?: string,
+  ): Promise<BillingConfirmPaymentResponse> => {
+    const response = await api.post<BillingConfirmPaymentResponse>(
+      `/billing/checkout/${checkoutId}/confirm-payment`,
+      payload,
+      {
+        headers: authToken
+          ? {
+              Authorization: `Bearer ${authToken}`,
+            }
+          : undefined,
+      },
+    );
+    return response.data || {};
+  },
+
+  getSubscription: async (
+    dashboardId: string,
+    authToken?: string,
+  ): Promise<BillingSubscription | null> => {
+    const response = await api.get<BillingSubscription | null>(
+      "/billing/subscription",
+      {
+        params: { dashboardId },
+        headers: authToken
+          ? {
+              Authorization: `Bearer ${authToken}`,
+            }
+          : undefined,
+      },
+    );
+    return response.data;
   },
 };
 

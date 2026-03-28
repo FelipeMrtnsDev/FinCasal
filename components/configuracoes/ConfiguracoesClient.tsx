@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react"
 import { useFinance } from "@/lib/finance-context"
 import { Category } from "@/lib/types"
-import { categoryService, dashboardService } from "@/services/financeService"
+import { billingService, categoryService, dashboardService } from "@/services/financeService"
 import { authService } from "@/services/authService"
 import { OwnNameCard } from "./OwnNameCard"
 import { InvitePartnerCard } from "./InvitePartnerCard"
@@ -112,6 +112,7 @@ export function ConfiguracoesClient() {
   const [dashboardMembers, setDashboardMembers] = useState<DashboardMember[]>([])
   const [invitingByEmail, setInvitingByEmail] = useState(false)
   const [inviteSent, setInviteSent] = useState(false)
+  const [isIndividualPlan, setIsIndividualPlan] = useState(false)
 
   const [categories, setCategories] = useState<Category[]>([])
   const [salesCategories, setSalesCategories] = useState<Category[]>([])
@@ -147,6 +148,18 @@ export function ConfiguracoesClient() {
       }
       if (userData?.email) {
         setCurrentUserEmail(userData.email)
+      }
+      const dashboardId = typeof userData?.dashboardId === "string" ? userData.dashboardId : ""
+      if (dashboardId) {
+        try {
+          const subscription = await billingService.getSubscription(dashboardId)
+          const resolvedPlanId = String(subscription?.planId || "").toUpperCase()
+          setIsIndividualPlan(resolvedPlanId.includes("INDIVIDUAL"))
+        } catch {
+          setIsIndividualPlan(false)
+        }
+      } else {
+        setIsIndividualPlan(false)
       }
 
       const apiNames = getNamesFromDashboardResponse(dashboardData)
@@ -373,16 +386,18 @@ export function ConfiguracoesClient() {
         error={nameSaveError}
       />
 
-      <InvitePartnerCard
-        partnerName={partnerName}
-        hasPartnerJoined={hasPartnerJoined}
-        members={dashboardMembers}
-        inviteEmail={inviteEmail}
-        onChangeInviteEmail={setInviteEmail}
-        onInviteByEmail={handleInviteByEmail}
-        inviting={invitingByEmail}
-        inviteSent={inviteSent}
-      />
+      {!isIndividualPlan && (
+        <InvitePartnerCard
+          partnerName={partnerName}
+          hasPartnerJoined={hasPartnerJoined}
+          members={dashboardMembers}
+          inviteEmail={inviteEmail}
+          onChangeInviteEmail={setInviteEmail}
+          onInviteByEmail={handleInviteByEmail}
+          inviting={invitingByEmail}
+          inviteSent={inviteSent}
+        />
+      )}
 
       <CategoriesCard
         variant="expenses"
@@ -422,9 +437,9 @@ export function ConfiguracoesClient() {
       <DataManagementCard />
 
       <div className="md:hidden mt-4 mb-8">
-        <Button 
-          variant="destructive" 
-          className="w-full gap-2" 
+        <Button
+          variant="destructive"
+          className="w-full gap-2"
           onClick={handleLogout}
         >
           <LogOut className="w-4 h-4" />

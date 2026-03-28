@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from 'next'
 import { Inter, Space_Mono } from 'next/font/google'
 import { Analytics } from '@vercel/analytics/next'
 import { AuthGuard } from '@/components/auth/AuthGuard'
+import { PaymentRequiredBanner } from '@/components/billing/PaymentRequiredBanner'
 import './globals.css'
 
 const inter = Inter({ subsets: ["latin"], variable: "--font-inter" })
@@ -27,6 +28,7 @@ export default function RootLayout({
   return (
     <html lang="pt-BR" suppressHydrationWarning>
       <body className={`${inter.variable} ${spaceMono.variable} font-sans antialiased`} suppressHydrationWarning>
+        <PaymentRequiredBanner />
         <AuthGuard>
           {children}
         </AuthGuard>

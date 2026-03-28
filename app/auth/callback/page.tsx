@@ -3,8 +3,7 @@
 import { useEffect, Suspense } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 import { Loader2 } from "lucide-react"
-
-const AUTH_COOKIE = "auth_token"
+import { authSession } from "@/lib/authSession"
 
 function CallbackContent() {
   const router = useRouter()
@@ -12,14 +11,30 @@ function CallbackContent() {
 
   useEffect(() => {
     const token = searchParams.get("token")
-    const redirectTo = searchParams.get("next")
+    const onboardingToken =
+      searchParams.get("onboardingToken") || searchParams.get("onboarding_token")
+    const dashboardId = searchParams.get("dashboardId")
+    const paymentRequired =
+      searchParams.get("paymentRequired") === "true" ||
+      searchParams.get("requiresPayment") === "true"
+
     if (token) {
-      localStorage.setItem("token", token)
-      document.cookie = `${AUTH_COOKIE}=${encodeURIComponent(token)}; path=/; max-age=2592000; samesite=lax`
-      router.push(redirectTo || "/")
-    } else {
-      router.push("/login")
+      authSession.persistFinalToken(token)
+      localStorage.removeItem("payment_required")
+      router.push("/")
+      return
     }
+
+    if ((paymentRequired && onboardingToken) || onboardingToken) {
+      authSession.persistOnboardingSession({
+        onboardingToken,
+        dashboardId,
+      })
+      router.push("/plans")
+      return
+    }
+
+    router.push("/login")
   }, [searchParams, router])
 
   return (

@@ -57,7 +57,7 @@ const toNumber = (value: unknown): number =>
   typeof value === "number"
     ? value
     : typeof value === "string"
-      ? Number(value) || 0
+      ? Number(value.replace(/\./g, "").replace(",", ".")) || Number(value) || 0
       : 0;
 
 const summaryZero: DashboardSummary = {
@@ -183,7 +183,67 @@ function normalizeEvolutionRows(
   baseMonth?: string,
   startMonth?: string,
 ): MonthlyEvolution[] {
-  const rows = Array.isArray(data) ? data : [];
+  const rows = (() => {
+    if (Array.isArray(data)) return data;
+    if (!data || typeof data !== "object") return [];
+    const visited = new Set<unknown>();
+    const queue: unknown[] = [data];
+    const arrays: unknown[][] = [];
+
+    while (queue.length > 0) {
+      const current = queue.shift();
+      if (!current || visited.has(current)) continue;
+      visited.add(current);
+
+      if (Array.isArray(current)) {
+        arrays.push(current);
+        continue;
+      }
+
+      if (typeof current !== "object") continue;
+      const record = current as Record<string, unknown>;
+      const preferredKeys = [
+        "items",
+        "rows",
+        "data",
+        "months",
+        "evolution",
+        "results",
+        "monthlyEvolution",
+        "timeline",
+        "history",
+      ];
+      for (const key of preferredKeys) {
+        if (key in record) queue.push(record[key]);
+      }
+      for (const value of Object.values(record)) {
+        if (value && typeof value === "object") queue.push(value);
+      }
+    }
+
+    const objectRows = arrays.find((arr) =>
+      arr.some((item) => item && typeof item === "object"),
+    );
+    if (objectRows) return objectRows;
+
+    const root = data as Record<string, unknown>;
+    const rootEntries = Object.entries(root).filter(([key, value]) => {
+      return /^\d{4}-\d{1,2}$/.test(key) && value && typeof value === "object";
+    });
+    if (rootEntries.length > 0) {
+      return rootEntries.map(([monthKey, value]) => {
+        const monthToken = /^\d{4}-\d{2}$/.test(monthKey)
+          ? monthKey
+          : `${monthKey.split("-")[0]}-${monthKey.split("-")[1].padStart(2, "0")}`;
+        return {
+          ...(value as Record<string, unknown>),
+          month: monthToken,
+        };
+      });
+    }
+
+    return [];
+  })();
   const reference = parseMonthToken(baseMonth) || new Date();
   const userStart = parseMonthToken(startMonth);
   const fallbackStart = subMonths(reference, 5);
@@ -206,10 +266,32 @@ function normalizeEvolutionRows(
   for (const row of rows) {
     if (!row || typeof row !== "object") continue;
     const record = row as Record<string, unknown>;
+    const yearValue = toNumber(
+      record.year ?? record.referenceYear ?? record.ano ?? record.y,
+    );
+    const monthValue = toNumber(
+      record.monthNumber ??
+        record.monthIndex ??
+        record.monthValue ??
+        record.mesNumero ??
+        record.mes ??
+        (typeof record.month === "number" ? record.month : null),
+    );
+    const hasYearMonthPair =
+      yearValue >= 1900 &&
+      yearValue <= 3000 &&
+      monthValue >= 1 &&
+      monthValue <= 12;
+    const tokenFromYearMonth = hasYearMonthPair
+      ? `${Math.trunc(yearValue)}-${String(Math.trunc(monthValue)).padStart(2, "0")}`
+      : null;
+
     const rawMonth =
       (typeof record.month === "string" && record.month) ||
       (typeof record.referenceMonth === "string" && record.referenceMonth) ||
       (typeof record.period === "string" && record.period) ||
+      (typeof record.monthLabel === "string" && record.monthLabel) ||
+      (typeof record.label === "string" && record.label) ||
       (typeof record.date === "string" && record.date) ||
       "";
 
@@ -218,16 +300,38 @@ function normalizeEvolutionRows(
     const fallbackToken =
       labelTokenPairs.find((pair) => textMonth.startsWith(pair.label))?.token ||
       null;
-    const token = tokenMatch ? tokenMatch[0] : fallbackToken;
+    const token = tokenMatch
+      ? tokenMatch[0]
+      : tokenFromYearMonth || fallbackToken;
     if (!token) continue;
 
     const renda = toNumber(
-      record.renda ?? record.income ?? record.totalIncomes,
+      record.renda ??
+        record.income ??
+        record.totalIncomes ??
+        record.totalIncome ??
+        record.receita ??
+        record.receitas ??
+        record.revenue ??
+        record.incomeAmount,
     );
     const despesas = toNumber(
-      record.despesas ?? record.expenses ?? record.totalExpenses,
+      record.despesas ??
+        record.expenses ??
+        record.totalExpenses ??
+        record.totalExpense ??
+        record.despesa ??
+        record.gastos ??
+        record.spent ??
+        record.expenseAmount,
     );
-    const saldo = toNumber(record.saldo ?? record.balance ?? renda - despesas);
+    const saldo = toNumber(
+      record.saldo ??
+        record.balance ??
+        record.net ??
+        record.netAmount ??
+        renda - despesas,
+    );
 
     monthMap.set(token, {
       month: monthLabel(parseMonthToken(token) || new Date()),
@@ -492,6 +596,30 @@ const buildWindowMonths = (baseMonth?: string, startMonth?: string): Date[] => {
   return Array.from({ length: 6 }, (_, i) => addMonths(windowStart, i));
 };
 
+const buildMonthlyEvolutionFromRaw = (
+  expenses: RawExpense[],
+  incomes: RawIncome[],
+  month?: string,
+  startMonth?: string,
+): MonthlyEvolution[] => {
+  const months = buildWindowMonths(month, startMonth);
+  return months.map((monthDate) => {
+    const token = monthToken(monthDate);
+    const despesas = expenses
+      .filter((item) => monthKey(item.date) === token)
+      .reduce((acc, item) => acc + toNumber(item.amount), 0);
+    const renda = incomes
+      .filter((item) => monthKey(item.date) === token)
+      .reduce((acc, item) => acc + toNumber(item.amount), 0);
+    return {
+      month: monthLabel(monthDate),
+      despesas,
+      renda,
+      saldo: renda - despesas,
+    };
+  });
+};
+
 async function getExpensesRaw(
   view?: DataScope | ViewMode,
 ): Promise<RawExpense[]> {
@@ -606,7 +734,32 @@ export const summaryService = {
         ],
         params,
       );
-      return normalizeEvolutionRows(data, month, startMonth);
+      const normalized = normalizeEvolutionRows(data, month, startMonth);
+      const hasNonZeroValue = normalized.some(
+        (row) =>
+          toNumber(row.despesas) !== 0 ||
+          toNumber(row.renda) !== 0 ||
+          toNumber(row.saldo) !== 0,
+      );
+      if (hasNonZeroValue) return normalized;
+
+      const [expenses, incomes] = await Promise.all([
+        getExpensesRaw(view),
+        getIncomesRaw(view),
+      ]);
+      const fallback = buildMonthlyEvolutionFromRaw(
+        expenses,
+        incomes,
+        month,
+        startMonth,
+      );
+      const fallbackHasNonZero = fallback.some(
+        (row) =>
+          toNumber(row.despesas) !== 0 ||
+          toNumber(row.renda) !== 0 ||
+          toNumber(row.saldo) !== 0,
+      );
+      return fallbackHasNonZero ? fallback : normalized;
     } catch (error) {
       console.error("Erro ao buscar evolução mensal", error);
       try {
@@ -614,22 +767,12 @@ export const summaryService = {
           getExpensesRaw(view),
           getIncomesRaw(view),
         ]);
-        const months = buildWindowMonths(month, startMonth);
-        return months.map((monthDate) => {
-          const token = monthToken(monthDate);
-          const despesas = expenses
-            .filter((item) => monthKey(item.date) === token)
-            .reduce((acc, item) => acc + toNumber(item.amount), 0);
-          const renda = incomes
-            .filter((item) => monthKey(item.date) === token)
-            .reduce((acc, item) => acc + toNumber(item.amount), 0);
-          return {
-            month: monthLabel(monthDate),
-            despesas,
-            renda,
-            saldo: renda - despesas,
-          };
-        });
+        return buildMonthlyEvolutionFromRaw(
+          expenses,
+          incomes,
+          month,
+          startMonth,
+        );
       } catch {
         return normalizeEvolutionRows([], month, startMonth);
       }
