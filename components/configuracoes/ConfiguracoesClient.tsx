@@ -153,7 +153,9 @@ export function ConfiguracoesClient() {
       if (dashboardId) {
         try {
           const subscription = await billingService.getSubscription(dashboardId)
-          const resolvedPlanId = String(subscription?.planId || "").toUpperCase()
+          console.log("subscription", subscription)
+          const resolvedPlanId = String(subscription?.plan || "").toUpperCase()
+          console.log("resolvedPlanId", resolvedPlanId)
           setIsIndividualPlan(resolvedPlanId.includes("INDIVIDUAL"))
         } catch {
           setIsIndividualPlan(false)
@@ -373,6 +375,26 @@ export function ConfiguracoesClient() {
         <h1 className="text-2xl md:text-3xl font-bold text-foreground">Configuracoes</h1>
         <p className="text-muted-foreground text-sm mt-1">Personalize os nomes e categorias</p>
       </div>
+
+      {isIndividualPlan && (
+        <div className="rounded-xl border border-primary/20 bg-linear-to-r from-primary/5 to-transparent p-5 md:p-6 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 shadow-sm relative overflow-hidden">
+          <div className="absolute left-0 top-0 bottom-0 w-1 bg-primary"></div>
+          <div className="pl-1 md:pl-2">
+            <h3 className="font-semibold text-foreground text-lg">
+              Plano Casal
+            </h3>
+            <p className="text-sm mt-1">
+              Faça upgrade para liberar o convite e organizar as finanças junto com seu parceiro(a).
+            </p>
+          </div>
+          <Button 
+            className="w-full sm:w-auto shrink-0 bg-primary text-primary-foreground hover:bg-primary/90 transition-all font-medium shadow-sm"
+            onClick={() => window.location.href = "/plans"}
+          >
+            Fazer Upgrade
+          </Button>
+        </div>
+      )}
 
       <OwnNameCard
         ownName={ownName}

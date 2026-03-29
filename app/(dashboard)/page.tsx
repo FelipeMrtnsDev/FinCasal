@@ -1,9 +1,9 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useState } from "react"
+import { useQuery } from "@tanstack/react-query"
 import { useFinance } from "@/lib/finance-context"
-import { summaryService, DashboardSummary, MonthlyEvolution, CategoryData, PaymentMethodData, PersonData } from "@/services/summaryService"
-import { expenseService, incomeService } from "@/services/financeService"
+import { summaryService, DashboardSummary, CategoryData, PaymentMethodData, PersonData } from "@/services/summaryService"
 import { StatsCards } from "@/components/dashboard/StatsCards"
 import { EvolutionChart } from "@/components/dashboard/EvolutionChart"
 import { CategoryChart } from "@/components/dashboard/CategoryChart"
@@ -20,102 +20,71 @@ import { ptBR } from "date-fns/locale"
 import { Expense, Income } from "@/lib/types"
 import { getMonthOptionsFromStart } from "@/lib/month-options"
 
+function ChartSkeleton() {
+  return (
+    <div className="flex flex-col gap-4">
+      <Skeleton className="h-4 w-40" />
+      <Skeleton className="h-64 w-full" />
+    </div>
+  )
+}
+
+const summaryZero: DashboardSummary = {
+  totalIncomes: 0, totalExpenses: 0, balance: 0,
+  pixExpenses: 0, cardExpenses: 0, fixedExpenses: 0, variableExpenses: 0,
+  byPerson: { eu: 0, parceiro: 0 },
+}
+
 export default function DashboardPage() {
   const { currentMonth, setCurrentMonth, viewMode, startMonth, viewModeReady } = useFinance()
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
-  const [summary, setSummary] = useState<DashboardSummary>({
-    totalIncomes: 0,
-    totalExpenses: 0,
-    balance: 0,
-    pixExpenses: 0,
-    cardExpenses: 0,
-    fixedExpenses: 0,
-    variableExpenses: 0,
-    byPerson: { eu: 0, parceiro: 0 },
+  const [activeTab, setActiveTab] = useState("evolucao")
+
+  // Main dashboard data — single aggregated call
+  const { data: initData, isLoading: loading } = useQuery({
+    queryKey: ["dashboard-init", currentMonth, viewMode],
+    queryFn: () => summaryService.getDashboardInit(currentMonth, viewMode),
+    enabled: viewModeReady,
   })
-  const [evolution, setEvolution] = useState<MonthlyEvolution[]>([])
-  const [categories, setCategories] = useState<CategoryData[]>([])
-  const [paymentMethods, setPaymentMethods] = useState<PaymentMethodData[]>([])
-  const [people, setPeople] = useState<PersonData[]>([])
-  const [recentExpenses, setRecentExpenses] = useState<Expense[]>([])
-  const [recentIncomes, setRecentIncomes] = useState<Income[]>([])
 
-  const getPaymentValue = (rows: PaymentMethodData[], match: RegExp): number => {
-    return rows
-      .filter((row) => match.test((row.name || "").toLowerCase()))
-      .reduce((acc, row) => acc + (Number(row.value) || 0), 0)
-  }
+  const summary = initData?.summary ?? summaryZero
+  const recentExpenses = (initData?.recentExpenses ?? []) as unknown as Expense[]
+  const recentIncomes = (initData?.recentIncomes ?? []) as unknown as Income[]
 
-  // Fetch evolution data separately - unfiltered by month
-  useEffect(() => {
-    if (!viewModeReady) return
-    async function fetchEvolution() {
-      try {
-        const evolutionData = await summaryService.getAllMonthlyEvolution(viewMode)
-        setEvolution(evolutionData)
-      } catch (error) {
-        console.error("Failed to fetch evolution data", error)
-      }
-    }
-    fetchEvolution()
-  }, [viewMode, viewModeReady])
+  // Evolution data — independent of month filter
+  const { data: evolution = [] } = useQuery({
+    queryKey: ["evolution", viewMode],
+    queryFn: () => summaryService.getAllMonthlyEvolution(viewMode),
+    enabled: viewModeReady,
+  })
 
-  useEffect(() => {
-    async function fetchData() {
-      setLoading(true)
-      try {
-        const [summaryData, categoriesData, paymentMethodsData, peopleData, expensesData, incomesData] = await Promise.all([
-          summaryService.getSummary(currentMonth, viewMode),
-          summaryService.getByCategory(currentMonth, viewMode),
-          summaryService.getByPaymentMethod(currentMonth, viewMode),
-          summaryService.getByPerson(currentMonth, viewMode),
-          expenseService.getAll({ month: currentMonth, limit: 5, view: viewMode }),
-          incomeService.getAll({ month: currentMonth, limit: 5, view: viewMode })
-        ])
+  // Lazy: Categories tab — only fetched when selected
+  const { data: categories = [], isLoading: categoriesLoading, isFetched: categoriesLoaded } = useQuery({
+    queryKey: ["categories-summary", currentMonth, viewMode],
+    queryFn: () => summaryService.getByCategory(currentMonth, viewMode),
+    enabled: viewModeReady && activeTab === "categorias",
+  })
 
-        const allMonthExpenses = await expenseService.getAll({ month: currentMonth, view: viewMode })
-        const pixFromExpenses = allMonthExpenses
-          .filter((expense) => {
-            const method = String(expense.paymentMethod || "").toLowerCase()
-            return method === "pix"
-          })
-          .reduce((acc, expense) => acc + (Number(expense.amount) || 0), 0)
-        const cardFromExpenses = allMonthExpenses
-          .filter((expense) => {
-            const method = String(expense.paymentMethod || "").toLowerCase()
-            return method.includes("credit") || method.includes("card") || method.includes("cart")
-          })
-          .reduce((acc, expense) => acc + (Number(expense.amount) || 0), 0)
+  // Lazy: Details tab — only fetched when selected
+  const { data: detailsData, isLoading: detailsLoading, isFetched: detailsLoaded } = useQuery({
+    queryKey: ["details", currentMonth, viewMode],
+    queryFn: async () => {
+      const [paymentData, peopleData] = await Promise.all([
+        summaryService.getByPaymentMethod(currentMonth, viewMode),
+        summaryService.getByPerson(currentMonth, viewMode),
+      ])
+      return { paymentMethods: paymentData, people: peopleData }
+    },
+    enabled: viewModeReady && activeTab === "detalhes",
+  })
 
-        const pixFallback = getPaymentValue(paymentMethodsData, /pix/)
-        const cardFallback = getPaymentValue(paymentMethodsData, /cart|credit/)
-        setSummary({
-          ...summaryData,
-          pixExpenses: summaryData.pixExpenses > 0 ? summaryData.pixExpenses : Math.max(pixFallback, pixFromExpenses),
-          cardExpenses: summaryData.cardExpenses > 0 ? summaryData.cardExpenses : Math.max(cardFallback, cardFromExpenses),
-        })
-        setCategories(categoriesData)
-        setPaymentMethods(paymentMethodsData)
-        setPeople(peopleData)
-        setRecentExpenses(expensesData)
-        setRecentIncomes(incomesData)
-      } catch (error) {
-        console.error("Failed to fetch dashboard data", error)
-        setError("Falha ao carregar dados do painel")
-      } finally {
-        setLoading(false)
-      }
-    }
-
-    if (!viewModeReady) return
-    fetchData()
-  }, [currentMonth, viewMode, viewModeReady])
+  const paymentMethods = detailsData?.paymentMethods ?? []
+  const people = detailsData?.people ?? []
 
   const [currentYear, currentMonthNumber] = currentMonth.split("-").map(Number)
   const monthDate = new Date(currentYear, (currentMonthNumber || 1) - 1, 1)
   const monthName = format(monthDate, "MMMM 'de' yyyy", { locale: ptBR })
   const monthOptions = getMonthOptionsFromStart(startMonth)
+
   const emptyChartMessage = (
     <div className="h-64 flex items-center justify-center text-muted-foreground text-sm">
       Nenhum dado encontrado para este mes
@@ -167,7 +136,7 @@ export default function DashboardPage() {
         </Card>
       ) : (
         <Card>
-          <Tabs defaultValue="evolucao" className="w-full">
+          <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
             <CardHeader className="pb-3">
               <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
                 <div>
@@ -196,18 +165,36 @@ export default function DashboardPage() {
               </TabsContent>
 
               <TabsContent value="categorias" className="mt-0">
-                {categories.length === 0 ? emptyChartMessage : <CategoryChart data={categories} totalExpenses={summary?.totalExpenses || 0} />}
+                {categoriesLoading ? (
+                  <ChartSkeleton />
+                ) : categories.length === 0 && categoriesLoaded ? (
+                  emptyChartMessage
+                ) : categoriesLoaded ? (
+                  <CategoryChart data={categories} totalExpenses={summary?.totalExpenses || 0} />
+                ) : (
+                  <ChartSkeleton />
+                )}
               </TabsContent>
 
               <TabsContent value="detalhes" className="mt-0">
-                {hasDetailsData ? <PaymentMethodChart data={paymentMethods} summary={summary} /> : emptyChartMessage}
+                {detailsLoading ? (
+                  <ChartSkeleton />
+                ) : detailsLoaded ? (
+                  hasDetailsData ? (
+                    <PaymentMethodChart data={paymentMethods} summary={summary} />
+                  ) : (
+                    emptyChartMessage
+                  )
+                ) : (
+                  <ChartSkeleton />
+                )}
               </TabsContent>
             </CardContent>
           </Tabs>
         </Card>
       )}
 
-      {viewMode === "casal" && !loading && summary && (
+      {viewMode === "casal" && !loading && detailsLoaded && (
         <PersonChart data={people} totalExpenses={summary.totalExpenses} />
       )}
 

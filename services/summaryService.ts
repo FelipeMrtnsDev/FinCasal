@@ -53,6 +53,12 @@ export interface DailySpending {
   valor: number;
 }
 
+export interface DashboardInitData {
+  summary: DashboardSummary;
+  recentExpenses: Array<Record<string, unknown>>;
+  recentIncomes: Array<Record<string, unknown>>;
+}
+
 const toNumber = (value: unknown): number =>
   typeof value === "number"
     ? value
@@ -750,6 +756,40 @@ export const summaryService = {
       } catch {
         return summaryZero;
       }
+    }
+  },
+
+  getDashboardInit: async (
+    month?: string,
+    view?: DataScope | ViewMode,
+  ): Promise<DashboardInitData> => {
+    try {
+      const params = { ...(month ? { month } : {}), view: toDataScope(view) };
+      const response = await getWithFallback<unknown>(
+        ["/summary/dashboard-init"],
+        params,
+      );
+      const record = (response && typeof response === "object" ? response : {}) as Record<string, unknown>;
+      return {
+        summary: normalizeSummary(record.summary),
+        recentExpenses: Array.isArray(record.recentExpenses) ? record.recentExpenses : [],
+        recentIncomes: Array.isArray(record.recentIncomes) ? record.recentIncomes : [],
+      };
+    } catch (error) {
+      console.warn("dashboard-init não disponível, fallback para chamadas separadas", error);
+      const [summary, expenses, incomes] = await Promise.all([
+        summaryService.getSummary(month, view),
+        getExpensesRaw(view),
+        getIncomesRaw(view),
+      ]);
+      const monthFilter = (date?: string) => !month || String(date || "").slice(0, 7) === month;
+      const filteredExpenses = expenses.filter(e => monthFilter(e.date));
+      const filteredIncomes = incomes.filter(i => monthFilter(i.date));
+      return {
+        summary,
+        recentExpenses: filteredExpenses.slice(0, 5) as unknown as Array<Record<string, unknown>>,
+        recentIncomes: filteredIncomes.slice(0, 5) as unknown as Array<Record<string, unknown>>,
+      };
     }
   },
 

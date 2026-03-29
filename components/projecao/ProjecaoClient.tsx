@@ -1,6 +1,7 @@
 "use client"
 
-import { useEffect, useMemo, useState } from "react"
+import { useMemo, useState } from "react"
+import { useQuery, useQueryClient } from "@tanstack/react-query"
 import { useFinance } from "@/lib/finance-context"
 import { savingsGoalService } from "@/services/financeService"
 import { Calendar, PiggyBank, Target, TrendingUp, Wallet } from "lucide-react"
@@ -17,10 +18,10 @@ import { BudgetTabContent } from "@/components/orcamento/BudgetTabContent"
 
 export function ProjecaoClient() {
   const { incomes, expenses, isLoaded } = useFinance()
-  const [savingsGoals, setSavingsGoals] = useState<SavingsGoal[]>([])
-  const [loadingGoals, setLoadingGoals] = useState(true)
+  const queryClient = useQueryClient()
   const [goalDialogOpen, setGoalDialogOpen] = useState(false)
   const [depositDialogOpen, setDepositDialogOpen] = useState(false)
+  const [activeTab, setActiveTab] = useState("metas")
   const [selectedGoalId, setSelectedGoalId] = useState<string | null>(null)
   const [depositAmount, setDepositAmount] = useState("")
   const [savingGoal, setSavingGoal] = useState(false)
@@ -33,27 +34,21 @@ export function ProjecaoClient() {
     deadline: "",
   })
 
-  const fetchSavingsGoals = async () => {
-    setLoadingGoals(true)
-    try {
+  const { data: savingsGoals = [], isLoading: loadingGoals } = useQuery({
+    queryKey: ["savings-goals"],
+    queryFn: async () => {
       const data = await savingsGoalService.getAll()
-      const normalized = (data || []).map((goal) => ({
+      return (data || []).map((goal) => ({
         ...goal,
         targetAmount: Number(goal.targetAmount) || 0,
         currentAmount: Number(goal.currentAmount) || 0,
       }))
-      setSavingsGoals(normalized)
-    } catch (error) {
-      console.error("Erro ao buscar metas:", error)
-      setSavingsGoals([])
-    } finally {
-      setLoadingGoals(false)
-    }
-  }
+    },
+  })
 
-  useEffect(() => {
-    fetchSavingsGoals()
-  }, [])
+  const invalidateGoals = () => {
+    queryClient.invalidateQueries({ queryKey: ["savings-goals"] })
+  }
 
   const resetGoalForm = () => {
     setGoalForm({ name: "", targetAmount: "", currentAmount: "", deadline: "" })
@@ -72,7 +67,7 @@ export function ProjecaoClient() {
         currentAmount: parseFloat(goalForm.currentAmount || "0"),
         ...(deadline ? { deadline } : {}),
       })
-      await fetchSavingsGoals()
+      invalidateGoals()
       resetGoalForm()
       setGoalDialogOpen(false)
     } finally {
@@ -89,7 +84,7 @@ export function ProjecaoClient() {
       await savingsGoalService.update(selectedGoalId, {
         currentAmount: goal.currentAmount + parseFloat(depositAmount),
       })
-      await fetchSavingsGoals()
+      invalidateGoals()
       setDepositAmount("")
       setDepositDialogOpen(false)
       setSelectedGoalId(null)
@@ -103,7 +98,7 @@ export function ProjecaoClient() {
     setDeletingGoalId(id)
     try {
       await savingsGoalService.delete(id)
-      await fetchSavingsGoals()
+      invalidateGoals()
     } finally {
       setDeletingGoalId(null)
     }
@@ -158,7 +153,7 @@ export function ProjecaoClient() {
           <p className="text-muted-foreground text-sm mt-1">Acompanhe quanto conseguem guardar</p>
         </div>
       </div>
-      <Tabs defaultValue="metas" className="w-full">
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
         <TabsList className="grid grid-cols-2 w-full sm:w-auto sm:inline-grid">
           <TabsTrigger value="metas" className="gap-2">
             <Target className="w-4 h-4" />
@@ -170,7 +165,7 @@ export function ProjecaoClient() {
           </TabsTrigger>
         </TabsList>
 
-        <BudgetTabContent />
+        <BudgetTabContent active={activeTab === "orcamentos"} />
 
         <TabsContent value="metas" className="mt-6 flex flex-col gap-6">
           <div className="flex justify-end">

@@ -1,6 +1,7 @@
 "use client"
 
-import { useCallback, useEffect, useMemo, useState } from "react"
+import { useMemo, useState, useRef, useEffect } from "react"
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 import { PackagePlus, Plus, Receipt, ShoppingBag, TrendingDown, TrendingUp, Package } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { useFinance } from "@/lib/finance-context"
@@ -14,34 +15,43 @@ import { SalesHistoryCard } from "./SalesHistoryCard"
 import { SaleDialog } from "./SaleDialog"
 import { SaleProductDialog } from "./SaleProductDialog"
 import { SaleDetailDialog } from "./SaleDetailDialog"
+import { Skeleton } from "@/components/ui/skeleton"
+
+function ChartsSkeleton() {
+  return (
+    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+      <div className="rounded-xl border border-border p-6">
+        <Skeleton className="h-4 w-40 mb-4" />
+        <Skeleton className="h-64 w-full" />
+      </div>
+      <div className="rounded-xl border border-border p-6">
+        <Skeleton className="h-4 w-40 mb-4" />
+        <Skeleton className="h-64 w-full" />
+      </div>
+    </div>
+  )
+}
 
 export function SalesTabContent() {
   const { viewMode } = useFinance()
-  const [sales, setSales] = useState<Sale[]>([])
-  const [saleProducts, setSaleProducts] = useState<SaleProduct[]>([])
-  const [summary, setSummary] = useState<SalesSummaryDTO>({
-    totalRevenue: 0,
-    totalCost: 0,
-    totalProfit: 0,
-    totalUnits: 0,
-  })
-  const [categoryRows, setCategoryRows] = useState<Array<{ category: string; revenue: number; profit: number }>>([])
-  const [productRows, setProductRows] = useState<Array<{ productId: string; name: string; revenue: number; profitPerUnit: number }>>([])
-  const [loading, setLoading] = useState(true)
+  const queryClient = useQueryClient()
   const [saleDialogOpen, setSaleDialogOpen] = useState(false)
   const [productDialogOpen, setProductDialogOpen] = useState(false)
   const [editingProduct, setEditingProduct] = useState<SaleProduct | null>(null)
   const [selectedSale, setSelectedSale] = useState<Sale | null>(null)
 
-  const loadData = useCallback(async () => {
-    setLoading(true)
-    try {
-      const [productsData, salesData, summaryData, byCategoryData, byProductData] = await Promise.all([
+  // Lazy chart visibility
+  const [chartsVisible, setChartsVisible] = useState(false)
+  const chartsRef = useRef<HTMLDivElement>(null)
+
+  // Main data query — products + sales + summary in parallel
+  const { data: mainData, isLoading: loading } = useQuery({
+    queryKey: ["sales-data", viewMode],
+    queryFn: async () => {
+      const [productsData, salesData, summaryData] = await Promise.all([
         saleProductService.getAll(),
         salesService.getAll({ view: viewMode }),
         salesService.getSummary(undefined, viewMode),
-        salesService.getByCategory(undefined, viewMode),
-        salesService.getByProduct(undefined, viewMode),
       ])
 
       const normalizedProducts: SaleProduct[] = productsData.map((product) => ({
@@ -67,31 +77,62 @@ export function SalesTabContent() {
         }
       })
 
-      setSaleProducts(normalizedProducts)
-      setSales(normalizedSales)
-      setSummary({
-        totalRevenue: Number(summaryData.totalRevenue) || 0,
-        totalCost: Number(summaryData.totalCost) || 0,
-        totalProfit: Number(summaryData.totalProfit) || 0,
-        totalUnits: Number(summaryData.totalUnits) || 0,
-      })
-      setCategoryRows(byCategoryData)
-      setProductRows(byProductData)
-    } catch (error) {
-      console.error("Erro ao carregar vendas:", error)
-      setSaleProducts([])
-      setSales([])
-      setSummary({ totalRevenue: 0, totalCost: 0, totalProfit: 0, totalUnits: 0 })
-      setCategoryRows([])
-      setProductRows([])
-    } finally {
-      setLoading(false)
-    }
-  }, [viewMode])
+      return {
+        products: normalizedProducts,
+        sales: normalizedSales,
+        summary: {
+          totalRevenue: Number(summaryData.totalRevenue) || 0,
+          totalCost: Number(summaryData.totalCost) || 0,
+          totalProfit: Number(summaryData.totalProfit) || 0,
+          totalUnits: Number(summaryData.totalUnits) || 0,
+        } as SalesSummaryDTO,
+      }
+    },
+  })
 
+  const saleProducts = mainData?.products ?? []
+  const sales = mainData?.sales ?? []
+  const summary = mainData?.summary ?? { totalRevenue: 0, totalCost: 0, totalProfit: 0, totalUnits: 0 }
+
+  // Lazy chart query — only when scrolled into view
+  const { data: chartData, isLoading: chartsLoading, isFetched: chartsLoaded } = useQuery({
+    queryKey: ["sales-charts", viewMode],
+    queryFn: async () => {
+      const [byCategoryData, byProductData] = await Promise.all([
+        salesService.getByCategory(undefined, viewMode),
+        salesService.getByProduct(undefined, viewMode),
+      ])
+      return { categoryRows: byCategoryData, productRows: byProductData }
+    },
+    enabled: chartsVisible,
+  })
+
+  const categoryRows = chartData?.categoryRows ?? []
+  const productRows = chartData?.productRows ?? []
+
+  // IntersectionObserver for lazy chart loading
   useEffect(() => {
-    loadData()
-  }, [loadData])
+    if (loading || chartsVisible) return
+    const el = chartsRef.current
+    if (!el) return
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting) {
+          setChartsVisible(true)
+          observer.disconnect()
+        }
+      },
+      { threshold: 0.1 }
+    )
+    observer.observe(el)
+    return () => observer.disconnect()
+  }, [loading, chartsVisible])
+
+  const invalidateSales = () => {
+    queryClient.invalidateQueries({ queryKey: ["sales-data"] })
+    queryClient.invalidateQueries({ queryKey: ["sales-charts"] })
+    queryClient.invalidateQueries({ queryKey: ["dashboard-init"] })
+  }
 
   const unitsByCategory = useMemo(() => {
     return sales.reduce<Record<string, number>>((acc, sale) => {
@@ -145,16 +186,15 @@ export function SalesTabContent() {
   const addOrUpdateProduct = async (payload: Omit<SaleProduct, "id">, id?: string) => {
     if (id) {
       await saleProductService.update(id, payload)
-      await loadData()
-      return
+    } else {
+      await saleProductService.create(payload)
     }
-    await saleProductService.create(payload)
-    await loadData()
+    invalidateSales()
   }
 
   const removeSaleProduct = async (id: string) => {
     await saleProductService.delete(id)
-    await loadData()
+    invalidateSales()
   }
 
   const addSale = async (payload: { productId: string; quantity: number; date: string }) => {
@@ -163,13 +203,19 @@ export function SalesTabContent() {
       quantity: payload.quantity,
       date: payload.date,
     }, viewMode)
-    await loadData()
+    invalidateSales()
   }
 
   const removeSale = async (id: string) => {
     await salesService.delete(id)
-    await loadData()
+    invalidateSales()
     setSelectedSale(null)
+  }
+
+  const removeMultipleSales = async (ids: string[]) => {
+    if (!ids.length) return
+    await salesService.deleteMany(ids)
+    invalidateSales()
   }
 
   return (
@@ -202,11 +248,23 @@ export function SalesTabContent() {
         />
       )}
 
-      {!loading && <SalesCharts byCategory={byCategory} byProduct={byProduct} />}
+      {/* Lazy-loaded charts area */}
+      <div ref={chartsRef}>
+        {chartsLoading ? (
+          <ChartsSkeleton />
+        ) : chartsLoaded ? (
+          <>
+            <SalesCharts byCategory={byCategory} byProduct={byProduct} />
+            <div className="mt-6">
+              <SalesCategoryCard byCategory={byCategory} />
+            </div>
+          </>
+        ) : !loading ? (
+          <ChartsSkeleton />
+        ) : null}
+      </div>
 
-      {!loading && <SalesCategoryCard byCategory={byCategory} />}
-
-      {!loading && <SalesHistoryCard sales={sales} onSelectSale={setSelectedSale} />}
+      {!loading && <SalesHistoryCard sales={sales} onSelectSale={setSelectedSale} onDeleteMultiple={removeMultipleSales} />}
 
       {!loading && <SaleDialog open={saleDialogOpen} onOpenChange={setSaleDialogOpen} products={saleProducts} onSave={addSale} />}
       {!loading && (

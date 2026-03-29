@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useMemo, useEffect } from "react"
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 import { useFinance } from "@/lib/finance-context"
 import { ExpenseDialog } from "@/components/expenses/ExpenseDialog"
 import { CsvImport } from "@/components/expenses/CsvImport"
@@ -9,73 +10,90 @@ import { ExpenseList } from "@/components/expenses/ExpenseList"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Button } from "@/components/ui/button"
 import { expenseService, categoryService } from "@/services/financeService"
-import { Expense, Category } from "@/lib/types"
+import { Category } from "@/lib/types"
 
 export default function DespesasPage() {
   const { viewMode, isLoaded: contextLoaded, viewModeReady } = useFinance()
+  const queryClient = useQueryClient()
 
-  // Local state for expenses and categories to ensure fresh data from API
-  const [expenses, setExpenses] = useState<Expense[]>([])
-  const [categories, setCategories] = useState<Category[]>([])
-  const [loading, setLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState("")
   const [filterCategory, setFilterCategory] = useState<string>("all")
   const [filterPayment, setFilterPayment] = useState<string>("all")
   const [filterPerson, setFilterPerson] = useState<string>("all")
   const [page, setPage] = useState(1)
-  const [pageSize, setPageSize] = useState(40)
-  const [totalItems, setTotalItems] = useState(0)
-  const [totalPages, setTotalPages] = useState(1)
 
-  // Fetch data from API
-  const fetchData = async () => {
-    setLoading(true)
-    try {
-      const expenseParams: Record<string, string | number> = { page }
-      if (searchTerm.trim()) expenseParams.search = searchTerm.trim()
-      if (filterCategory !== "all") expenseParams.category = filterCategory
-      if (viewMode === "casal" && filterPerson !== "all") expenseParams.person = filterPerson
-
-      const [expensesData, categoriesData] = await Promise.all([
-        expenseService.getPage({ ...expenseParams, view: viewMode }),
-        categoryService.getAll("EXPENSE")
-      ])
-      setExpenses(expensesData.items || [])
-      setPage(expensesData.page || page)
-      setPageSize(expensesData.pageSize || 40)
-      setTotalItems(expensesData.totalItems || 0)
-      setTotalPages(expensesData.totalPages || 1)
-      setCategories(categoriesData)
-    } catch (error) {
-      console.error("Failed to fetch data:", error)
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  useEffect(() => {
-    if (!viewModeReady) return
-    fetchData()
-  }, [viewMode, page, searchTerm, filterCategory, filterPerson, viewModeReady])
-
+  // Reset page when filters change
   useEffect(() => {
     setPage(1)
   }, [viewMode, searchTerm, filterCategory, filterPayment, filterPerson])
 
+  // Build query params
+  const expenseParams = useMemo(() => {
+    const params: Record<string, string | number> = { page }
+    if (searchTerm.trim()) params.search = searchTerm.trim()
+    if (filterCategory !== "all") params.category = filterCategory
+    if (viewMode === "casal" && filterPerson !== "all") params.person = filterPerson
+    return params
+  }, [page, searchTerm, filterCategory, filterPerson, viewMode])
+
+  // Fetch expenses with cache
+  const { data: expensesData, isLoading: expensesLoading } = useQuery({
+    queryKey: ["expenses", viewMode, expenseParams],
+    queryFn: () => expenseService.getPage({ ...expenseParams, view: viewMode }),
+    enabled: viewModeReady,
+  })
+
+  // Fetch categories with cache
+  const { data: categories = [] } = useQuery({
+    queryKey: ["expense-categories"],
+    queryFn: () => categoryService.getAll("EXPENSE"),
+    enabled: viewModeReady,
+    staleTime: 60_000,
+  })
+
+  const expenses = expensesData?.items ?? []
+  const totalItems = expensesData?.totalItems ?? 0
+  const totalPages = expensesData?.totalPages ?? 1
+  const pageSize = expensesData?.pageSize ?? 40
+  const loading = expensesLoading
+
+  const invalidateExpenses = () => {
+    queryClient.invalidateQueries({ queryKey: ["expenses"] })
+    queryClient.invalidateQueries({ queryKey: ["dashboard-init"] })
+  }
+
+  const createMutation = useMutation({
+    mutationFn: (data: any) => expenseService.create(data, viewMode),
+    onSuccess: invalidateExpenses,
+  })
+
+  const deleteMutation = useMutation({
+    mutationFn: (id: string) => expenseService.delete(id),
+    onSuccess: invalidateExpenses,
+  })
+
+  const bulkDeleteMutation = useMutation({
+    mutationFn: (ids: string[]) => expenseService.deleteMany(ids),
+    onSuccess: invalidateExpenses,
+  })
+
+  const editMutation = useMutation({
+    mutationFn: ({ id, payload }: { id: string; payload: any }) =>
+      expenseService.update(id, payload, viewMode),
+    onSuccess: invalidateExpenses,
+  })
+
   const handleAddExpense = async (expenseData: any) => {
-    await expenseService.create(expenseData, viewMode)
-    await fetchData() // Refresh list
+    await createMutation.mutateAsync(expenseData)
   }
 
   const handleDeleteExpense = async (id: string) => {
-    await expenseService.delete(id)
-    await fetchData() // Refresh list
+    await deleteMutation.mutateAsync(id)
   }
 
   const handleDeleteMultipleExpenses = async (ids: string[]) => {
     if (!ids.length) return
-    await expenseService.deleteMany(ids)
-    await fetchData() // Refresh list once
+    await bulkDeleteMutation.mutateAsync(ids)
   }
 
   const handleEditExpense = async (
@@ -89,12 +107,11 @@ export default function DespesasPage() {
       type?: string
     }
   ) => {
-    await expenseService.update(id, payload, viewMode)
-    await fetchData()
+    await editMutation.mutateAsync({ id, payload })
   }
 
   const handleImportExpenses = async () => {
-    await fetchData()
+    invalidateExpenses()
   }
 
   const filteredExpenses = useMemo(() => {

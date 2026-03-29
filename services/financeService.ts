@@ -457,10 +457,10 @@ export const incomeService = {
     return response.data;
   },
   delete: async (id: string): Promise<void> => {
-    // A rota base no app.ts é /api/incomes
-    // O axios chama /incomes/${id}
-    // Verificando se há barra extra no backend ou se o ID está vindo correto
     await api.delete(`/incomes/${id}`);
+  },
+  deleteMany: async (ids: string[]): Promise<void> => {
+    await api.post("/incomes/bulk-delete", { ids });
   },
 };
 
@@ -491,6 +491,9 @@ export const investmentService = {
   },
   delete: async (id: string): Promise<void> => {
     await api.delete(`/investments/${id}`);
+  },
+  deleteMany: async (ids: string[]): Promise<void> => {
+    await api.post("/investments/bulk-delete", { ids });
   },
   getSummary: async (view?: DataScope | ViewMode): Promise<any> => {
     if (!(await hasDashboardMembership()))
@@ -811,6 +814,9 @@ export const salesService = {
   },
   delete: async (id: string): Promise<void> => {
     await api.delete(`/sales/${id}`);
+  },
+  deleteMany: async (ids: string[]): Promise<void> => {
+    await api.post("/sales/bulk-delete", { ids });
   },
   getSummary: async (
     month?: string,
