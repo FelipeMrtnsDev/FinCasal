@@ -31,7 +31,7 @@ interface IncomeDialogProps {
 }
 
 export function IncomeDialog({ onAdd }: IncomeDialogProps) {
-  const { personNames } = useFinance()
+  const { personNames, viewMode } = useFinance()
   const [open, setOpen] = useState(false)
   const [loading, setLoading] = useState(false)
   const [form, setForm] = useState({
@@ -117,19 +117,21 @@ export function IncomeDialog({ onAdd }: IncomeDialogProps) {
               />
             </div>
           </div>
-          <div className="grid grid-cols-2 gap-4">
-            <div className="flex flex-col gap-2">
-              <Label>Pessoa</Label>
-              <Select value={form.person} onValueChange={(v) => setForm({ ...form, person: v as Person })}>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="eu">{personNames.eu}</SelectItem>
-                  <SelectItem value="parceiro">{personNames.parceiro}</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
+          <div className={`grid ${viewMode === "casal" ? "grid-cols-2" : "grid-cols-1"} gap-4`}>
+            {viewMode === "casal" && (
+              <div className="flex flex-col gap-2">
+                <Label>Pessoa</Label>
+                <Select value={form.person} onValueChange={(v) => setForm({ ...form, person: v as Person })}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="eu">{personNames.eu}</SelectItem>
+                    <SelectItem value="parceiro">{personNames.parceiro}</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
             <div className="flex flex-col gap-2">
               <Label>Recorrente</Label>
               <div className="flex items-center gap-2 h-9">

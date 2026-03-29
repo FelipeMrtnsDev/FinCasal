@@ -17,7 +17,7 @@ const defaultState: FinanceState = {
   investments: [],
   categories: DEFAULT_CATEGORIES,
   savingsGoals: [],
-  viewMode: "casal",
+  viewMode: "individual",
   personNames: { eu: "Eu", parceiro: "Parceiro(a)" },
   currentMonth: getLocalYearMonth(),
   startMonth: getLocalYearMonth(),
@@ -40,6 +40,8 @@ interface FinanceContextType extends FinanceState {
   setCurrentMonth: (month: string) => void
   importCSV: (data: Omit<Expense, "id">[]) => void
   isLoaded: boolean
+  viewModeReady: boolean
+  setViewModeReady: (ready: boolean) => void
 }
 
 const FinanceContext = createContext<FinanceContextType | undefined>(undefined)
@@ -47,6 +49,7 @@ const FinanceContext = createContext<FinanceContextType | undefined>(undefined)
 export function FinanceProvider({ children }: { children: React.ReactNode }) {
   const [state, setState] = useState<FinanceState>(defaultState)
   const [isLoaded, setIsLoaded] = useState(false)
+  const [viewModeReady, setViewModeReady] = useState(false)
 
   useEffect(() => {
     try {
@@ -166,6 +169,8 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
         setCurrentMonth,
         importCSV,
         isLoaded,
+        viewModeReady,
+        setViewModeReady,
       }}
     >
       {children}

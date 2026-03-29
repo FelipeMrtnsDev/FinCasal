@@ -12,7 +12,7 @@ import { expenseService, categoryService } from "@/services/financeService"
 import { Expense, Category } from "@/lib/types"
 
 export default function DespesasPage() {
-  const { viewMode, isLoaded: contextLoaded } = useFinance()
+  const { viewMode, isLoaded: contextLoaded, viewModeReady } = useFinance()
 
   // Local state for expenses and categories to ensure fresh data from API
   const [expenses, setExpenses] = useState<Expense[]>([])
@@ -54,8 +54,9 @@ export default function DespesasPage() {
   }
 
   useEffect(() => {
+    if (!viewModeReady) return
     fetchData()
-  }, [viewMode, page, searchTerm, filterCategory, filterPerson])
+  }, [viewMode, page, searchTerm, filterCategory, filterPerson, viewModeReady])
 
   useEffect(() => {
     setPage(1)
@@ -69,6 +70,12 @@ export default function DespesasPage() {
   const handleDeleteExpense = async (id: string) => {
     await expenseService.delete(id)
     await fetchData() // Refresh list
+  }
+
+  const handleDeleteMultipleExpenses = async (ids: string[]) => {
+    if (!ids.length) return
+    await expenseService.deleteMany(ids)
+    await fetchData() // Refresh list once
   }
 
   const handleEditExpense = async (
@@ -146,6 +153,7 @@ export default function DespesasPage() {
         categories={categories}
         loading={loading}
         onDelete={handleDeleteExpense}
+        onDeleteMultiple={handleDeleteMultipleExpenses}
         onEdit={handleEditExpense}
       />
 

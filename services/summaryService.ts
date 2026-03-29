@@ -620,11 +620,45 @@ const buildMonthlyEvolutionFromRaw = (
   });
 };
 
+const buildAllMonthsEvolution = (
+  expenses: RawExpense[],
+  incomes: RawIncome[],
+): MonthlyEvolution[] => {
+  const tokenSet = new Set<string>();
+  for (const item of expenses) {
+    const token = monthKey(item.date);
+    if (/^\d{4}-\d{2}$/.test(token)) tokenSet.add(token);
+  }
+  for (const item of incomes) {
+    const token = monthKey(item.date);
+    if (/^\d{4}-\d{2}$/.test(token)) tokenSet.add(token);
+  }
+  const tokens = Array.from(tokenSet).sort();
+  if (tokens.length === 0) return [];
+
+  return tokens.map((token) => {
+    const monthDate = parseMonthToken(token) || new Date();
+    const despesas = expenses
+      .filter((item) => monthKey(item.date) === token)
+      .reduce((acc, item) => acc + toNumber(item.amount), 0);
+    const renda = incomes
+      .filter((item) => monthKey(item.date) === token)
+      .reduce((acc, item) => acc + toNumber(item.amount), 0);
+    return {
+      month: monthLabel(monthDate),
+      despesas,
+      renda,
+      saldo: renda - despesas,
+    };
+  });
+};
+
 async function getExpensesRaw(
   view?: DataScope | ViewMode,
 ): Promise<RawExpense[]> {
   const data = await getWithFallback<unknown>(["/expenses"], {
     view: toDataScope(view),
+    pageSize: 10000,
   });
   if (Array.isArray(data)) return data as RawExpense[];
   if (!data || typeof data !== "object") return [];
@@ -776,6 +810,21 @@ export const summaryService = {
       } catch {
         return normalizeEvolutionRows([], month, startMonth);
       }
+    }
+  },
+
+  getAllMonthlyEvolution: async (
+    view?: DataScope | ViewMode,
+  ): Promise<MonthlyEvolution[]> => {
+    try {
+      const [expenses, incomes] = await Promise.all([
+        getExpensesRaw(view),
+        getIncomesRaw(view),
+      ]);
+      return buildAllMonthsEvolution(expenses, incomes);
+    } catch (error) {
+      console.error("Erro ao buscar evolução mensal completa", error);
+      return [];
     }
   },
 

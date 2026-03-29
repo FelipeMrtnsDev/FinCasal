@@ -21,7 +21,7 @@ import { Expense, Income } from "@/lib/types"
 import { getMonthOptionsFromStart } from "@/lib/month-options"
 
 export default function DashboardPage() {
-  const { currentMonth, setCurrentMonth, viewMode, startMonth } = useFinance()
+  const { currentMonth, setCurrentMonth, viewMode, startMonth, viewModeReady } = useFinance()
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [summary, setSummary] = useState<DashboardSummary>({
@@ -47,13 +47,26 @@ export default function DashboardPage() {
       .reduce((acc, row) => acc + (Number(row.value) || 0), 0)
   }
 
+  // Fetch evolution data separately - unfiltered by month
+  useEffect(() => {
+    if (!viewModeReady) return
+    async function fetchEvolution() {
+      try {
+        const evolutionData = await summaryService.getAllMonthlyEvolution(viewMode)
+        setEvolution(evolutionData)
+      } catch (error) {
+        console.error("Failed to fetch evolution data", error)
+      }
+    }
+    fetchEvolution()
+  }, [viewMode, viewModeReady])
+
   useEffect(() => {
     async function fetchData() {
       setLoading(true)
       try {
-        const [summaryData, evolutionData, categoriesData, paymentMethodsData, peopleData, expensesData, incomesData] = await Promise.all([
+        const [summaryData, categoriesData, paymentMethodsData, peopleData, expensesData, incomesData] = await Promise.all([
           summaryService.getSummary(currentMonth, viewMode),
-          summaryService.getMonthlyEvolution(currentMonth, startMonth, viewMode),
           summaryService.getByCategory(currentMonth, viewMode),
           summaryService.getByPaymentMethod(currentMonth, viewMode),
           summaryService.getByPerson(currentMonth, viewMode),
@@ -82,7 +95,6 @@ export default function DashboardPage() {
           pixExpenses: summaryData.pixExpenses > 0 ? summaryData.pixExpenses : Math.max(pixFallback, pixFromExpenses),
           cardExpenses: summaryData.cardExpenses > 0 ? summaryData.cardExpenses : Math.max(cardFallback, cardFromExpenses),
         })
-        setEvolution(evolutionData)
         setCategories(categoriesData)
         setPaymentMethods(paymentMethodsData)
         setPeople(peopleData)
@@ -96,8 +108,9 @@ export default function DashboardPage() {
       }
     }
 
+    if (!viewModeReady) return
     fetchData()
-  }, [currentMonth, startMonth, viewMode])
+  }, [currentMonth, viewMode, viewModeReady])
 
   const [currentYear, currentMonthNumber] = currentMonth.split("-").map(Number)
   const monthDate = new Date(currentYear, (currentMonthNumber || 1) - 1, 1)

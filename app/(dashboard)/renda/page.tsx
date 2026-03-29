@@ -9,7 +9,7 @@ import { IncomeStats } from "@/components/incomes/IncomeStats"
 import { IncomeList } from "@/components/incomes/IncomeList"
 
 export default function RendaPage() {
-  const { viewMode } = useFinance()
+  const { viewMode, viewModeReady } = useFinance()
   const [incomes, setIncomes] = useState<Income[]>([])
   const [loading, setLoading] = useState(true)
 
@@ -27,8 +27,9 @@ export default function RendaPage() {
   }
 
   useEffect(() => {
+    if (!viewModeReady) return
     fetchData()
-  }, [viewMode])
+  }, [viewMode, viewModeReady])
 
   const handleAddIncome = async (incomeData: any) => {
     await incomeService.create(incomeData, viewMode)

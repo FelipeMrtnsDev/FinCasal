@@ -396,6 +396,9 @@ export const expenseService = {
   delete: async (id: string): Promise<void> => {
     await api.delete(`/expenses/${id}`);
   },
+  deleteMany: async (ids: string[]): Promise<void> => {
+    await api.post("/expenses/bulk-delete", { ids });
+  },
   importCsv: async ({
     file,
     dashboardId,

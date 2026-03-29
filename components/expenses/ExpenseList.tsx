@@ -3,7 +3,7 @@
 import { useState } from "react"
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { HelpCircle, CreditCard, Smartphone, Banknote, ArrowLeftRight } from "lucide-react"
+import { HelpCircle, CreditCard, Smartphone, Banknote, ArrowLeftRight, CheckCircle2, Circle, Trash2, Loader2, ListChecks } from "lucide-react"
 import { Expense, Category, PaymentMethod } from "@/lib/types"
 import { useFinance } from "@/lib/finance-context"
 import { format, parseISO } from "date-fns"
@@ -16,6 +16,7 @@ interface ExpenseListProps {
   categories: Category[]
   loading?: boolean
   onDelete: (id: string) => Promise<void>
+  onDeleteMultiple?: (ids: string[]) => Promise<void>
   onEdit: (id: string, payload: {
     description?: string
     amount?: number
@@ -67,7 +68,7 @@ function formatCurrency(value: number) {
   return formatted;
 }
 
-export function ExpenseList({ expenses, categories, loading = false, onDelete, onEdit }: ExpenseListProps) {
+export function ExpenseList({ expenses, categories, loading = false, onDelete, onDeleteMultiple, onEdit }: ExpenseListProps) {
   const { viewMode, personNames } = useFinance()
   const [selectedExpense, setSelectedExpense] = useState<Expense | null>(null)
   const [detailsOpen, setDetailsOpen] = useState(false)
@@ -75,9 +76,35 @@ export function ExpenseList({ expenses, categories, loading = false, onDelete, o
   const [editingExpense, setEditingExpense] = useState<Expense | null>(null)
   const [editOpen, setEditOpen] = useState(false)
 
+  // Selection mode states
+  const [isSelectionMode, setIsSelectionMode] = useState(false)
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
+  const [isDeletingMultiple, setIsDeletingMultiple] = useState(false)
+
   const handleExpenseClick = (expense: Expense) => {
+    if (isSelectionMode) {
+      const next = new Set(selectedIds)
+      if (next.has(expense.id)) next.delete(expense.id)
+      else next.add(expense.id)
+      setSelectedIds(next)
+      return
+    }
+
     setSelectedExpense(expense)
     setDetailsOpen(true)
+  }
+
+  const handleToggleSelectionMode = () => {
+    setIsSelectionMode(!isSelectionMode)
+    setSelectedIds(new Set())
+  }
+
+  const handleSelectAll = () => {
+    if (selectedIds.size === expenses.length) {
+      setSelectedIds(new Set())
+    } else {
+      setSelectedIds(new Set(expenses.map(e => e.id)))
+    }
   }
 
   const handleDeleteExpense = async (id: string) => {
@@ -88,6 +115,18 @@ export function ExpenseList({ expenses, categories, loading = false, onDelete, o
       setDetailsOpen(false)
     } finally {
       setDeletingId(null)
+    }
+  }
+
+  const handleBulkDelete = async () => {
+    if (!onDeleteMultiple || selectedIds.size === 0) return
+    setIsDeletingMultiple(true)
+    try {
+      await onDeleteMultiple(Array.from(selectedIds))
+      setIsSelectionMode(false)
+      setSelectedIds(new Set())
+    } finally {
+      setIsDeletingMultiple(false)
     }
   }
 
@@ -137,10 +176,52 @@ export function ExpenseList({ expenses, categories, loading = false, onDelete, o
   return (
     <>
       <Card>
-        <CardHeader>
+        <CardHeader className="flex flex-row items-center justify-between pb-2">
           <CardTitle className="text-base">Lista de Despesas</CardTitle>
+          {!loading && expenses.length > 0 && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={handleToggleSelectionMode}
+              className="h-8 text-xs font-medium text-primary hover:text-primary/80"
+            >
+              <ListChecks className="w-4 h-4 mr-2" />
+              {isSelectionMode ? "Cancelar" : "Selecionar"}
+            </Button>
+          )}
         </CardHeader>
         <CardContent>
+          {isSelectionMode && expenses.length > 0 && (
+            <div className="flex items-center justify-between bg-muted/30 p-2 sm:p-3 rounded-md mb-4 border border-border/50">
+              <div className="flex items-center gap-2">
+                <Button 
+                  variant="ghost" 
+                  size="sm" 
+                  onClick={handleSelectAll}
+                  className="text-xs h-8"
+                >
+                  {selectedIds.size === expenses.length ? "Desmarcar Todos" : "Selecionar Todos"}
+                </Button>
+                <span className="text-xs text-muted-foreground font-medium">
+                  {selectedIds.size} selecionado{selectedIds.size !== 1 && 's'}
+                </span>
+              </div>
+              <Button
+                variant="destructive"
+                size="sm"
+                className="h-8 text-xs gap-1.5"
+                disabled={selectedIds.size === 0 || isDeletingMultiple}
+                onClick={handleBulkDelete}
+              >
+                {isDeletingMultiple ? (
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                ) : (
+                  <Trash2 className="w-3.5 h-3.5" />
+                )}
+                <span className="hidden sm:inline">Excluir</span>
+              </Button>
+            </div>
+          )}
           {expenses.length === 0 ? (
             <div className="py-12 text-center text-muted-foreground text-sm">
               Nenhuma despesa encontrada. Adicione sua primeira despesa!
@@ -181,6 +262,15 @@ export function ExpenseList({ expenses, categories, loading = false, onDelete, o
                     className="flex items-center gap-3 py-3 px-3 rounded-lg hover:bg-muted/50 transition-colors group cursor-pointer"
                     onClick={() => handleExpenseClick(expense)}
                   >
+                    {isSelectionMode && (
+                      <div className="shrink-0 transition-opacity duration-200">
+                        {selectedIds.has(expense.id) ? (
+                          <CheckCircle2 className="w-5 h-5 text-primary" />
+                        ) : (
+                          <Circle className="w-5 h-5 text-muted-foreground/30 group-hover:text-muted-foreground/60" />
+                        )}
+                      </div>
+                    )}
                     <div
                       className="w-9 h-9 rounded-full flex items-center justify-center shrink-0"
                       style={{ backgroundColor: catColor ? `${catColor}20` : undefined }}

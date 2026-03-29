@@ -40,7 +40,7 @@ const mobileNavItems = [
 export function AppShell({ children }: { children: React.ReactNode }) {
   const [collapsed, setCollapsed] = useState(false)
   const pathname = usePathname()
-  const { viewMode, setViewMode, personNames } = useFinance()
+  const { viewMode, setViewMode, personNames, setViewModeReady } = useFinance()
   const [canUseCoupleMode, setCanUseCoupleMode] = useState(false)
   const [isLoggedOut, setIsLoggedOut] = useState(false)
 
@@ -53,6 +53,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
     if (!tokenFromStorage && !tokenFromCookie) {
       setIsLoggedOut(true);
+      setViewModeReady(true);
+      return;
     }
 
     let mounted = true
@@ -71,9 +73,23 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           (typeof record.partnerEmail === "string" && record.partnerEmail.trim().length > 0)
         if (mounted) {
           setCanUseCoupleMode(hasPartner)
-          if (!hasPartner && viewMode === "casal") {
+          if (hasPartner) {
+            // Restore saved viewMode from localStorage if user has a partner
+            try {
+              const saved = localStorage.getItem("finance-app-data")
+              if (saved) {
+                const parsed = JSON.parse(saved)
+                if (parsed.viewMode === "casal") {
+                  setViewMode("casal")
+                }
+              }
+            } catch {
+              // ignore parse errors
+            }
+          } else if (viewMode === "casal") {
             setViewMode("individual")
           }
+          setViewModeReady(true)
         }
       } catch (error: any) {
         if (error?.response?.status === 401 || error?.response?.status === 403) {
@@ -84,6 +100,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           if (viewMode === "casal") {
             setViewMode("individual")
           }
+          setViewModeReady(true)
         }
       }
     }
@@ -93,7 +110,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     return () => {
       mounted = false
     }
-  }, [setViewMode, viewMode, isLoggedOut])
+  }, [setViewMode, viewMode, isLoggedOut, setViewModeReady])
 
   const handleLogout = async () => {
     await authService.logout()
@@ -110,11 +127,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         <p className="text-muted-foreground text-sm max-w-sm mb-6">
           Você precisa estar logado para acessar esta página. Por favor, faça login para continuar.
         </p>
-        <Link href="/login">
-          <Button size="lg" className="px-8">
-            Ir para o Login
-          </Button>
-        </Link>
+        <Button size="lg" className="px-8" onClick={handleLogout}>
+          Ir para o Login
+        </Button>
       </div>
     )
   }
