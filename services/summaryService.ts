@@ -6,7 +6,7 @@ import {
   subMonths,
 } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import { AxiosError } from "axios";
+import { DataScope, ViewMode } from "@/lib/types";
 
 export interface DashboardSummary {
   totalIncomes: number;
@@ -30,6 +30,7 @@ export interface MonthlyEvolution {
 }
 
 export interface CategoryData {
+  categoryId?: string;
   name: string;
   value: number;
   color: string;
@@ -52,11 +53,17 @@ export interface DailySpending {
   valor: number;
 }
 
+export interface DashboardInitData {
+  summary: DashboardSummary;
+  recentExpenses: Array<Record<string, unknown>>;
+  recentIncomes: Array<Record<string, unknown>>;
+}
+
 const toNumber = (value: unknown): number =>
   typeof value === "number"
     ? value
     : typeof value === "string"
-      ? Number(value) || 0
+      ? Number(value.replace(/\./g, "").replace(",", ".")) || Number(value) || 0
       : 0;
 
 const summaryZero: DashboardSummary = {
@@ -79,16 +86,16 @@ const monthToken = (monthDate: Date): string => format(monthDate, "yyyy-MM");
 
 const parseMonthToken = (value?: string): Date | null => {
   if (!value || !/^\d{4}-\d{2}$/.test(value)) return null;
-  return new Date(`${value}-01`);
+  const [yearRaw, monthRaw] = value.split("-");
+  const year = Number(yearRaw);
+  const monthIndex = Number(monthRaw) - 1;
+  if (!Number.isInteger(year) || !Number.isInteger(monthIndex)) return null;
+  return new Date(year, monthIndex, 1);
 };
 
-const getStatusCode = (error: unknown): number | null => {
-  if (error instanceof AxiosError) return error.response?.status ?? null;
-  if (typeof error === "object" && error !== null && "response" in error) {
-    const response = (error as { response?: { status?: number } }).response;
-    return response?.status ?? null;
-  }
-  return null;
+const toDataScope = (view?: DataScope | ViewMode): DataScope => {
+  if (view === "COUPLE" || view === "casal") return "COUPLE";
+  return "INDIVIDUAL";
 };
 
 async function getWithFallback<T>(
@@ -102,8 +109,7 @@ async function getWithFallback<T>(
       return response.data;
     } catch (error) {
       lastError = error;
-      const status = getStatusCode(error);
-      if (status === 400 && params && Object.keys(params).length > 0) {
+      if (params && Object.keys(params).length > 0) {
         try {
           const response = await api.get<T>(path);
           return response.data;
@@ -111,7 +117,6 @@ async function getWithFallback<T>(
           lastError = retryError;
         }
       }
-      if (status !== 404 && status !== 400) break;
     }
   }
   throw lastError;
@@ -184,7 +189,67 @@ function normalizeEvolutionRows(
   baseMonth?: string,
   startMonth?: string,
 ): MonthlyEvolution[] {
-  const rows = Array.isArray(data) ? data : [];
+  const rows = (() => {
+    if (Array.isArray(data)) return data;
+    if (!data || typeof data !== "object") return [];
+    const visited = new Set<unknown>();
+    const queue: unknown[] = [data];
+    const arrays: unknown[][] = [];
+
+    while (queue.length > 0) {
+      const current = queue.shift();
+      if (!current || visited.has(current)) continue;
+      visited.add(current);
+
+      if (Array.isArray(current)) {
+        arrays.push(current);
+        continue;
+      }
+
+      if (typeof current !== "object") continue;
+      const record = current as Record<string, unknown>;
+      const preferredKeys = [
+        "items",
+        "rows",
+        "data",
+        "months",
+        "evolution",
+        "results",
+        "monthlyEvolution",
+        "timeline",
+        "history",
+      ];
+      for (const key of preferredKeys) {
+        if (key in record) queue.push(record[key]);
+      }
+      for (const value of Object.values(record)) {
+        if (value && typeof value === "object") queue.push(value);
+      }
+    }
+
+    const objectRows = arrays.find((arr) =>
+      arr.some((item) => item && typeof item === "object"),
+    );
+    if (objectRows) return objectRows;
+
+    const root = data as Record<string, unknown>;
+    const rootEntries = Object.entries(root).filter(([key, value]) => {
+      return /^\d{4}-\d{1,2}$/.test(key) && value && typeof value === "object";
+    });
+    if (rootEntries.length > 0) {
+      return rootEntries.map(([monthKey, value]) => {
+        const monthToken = /^\d{4}-\d{2}$/.test(monthKey)
+          ? monthKey
+          : `${monthKey.split("-")[0]}-${monthKey.split("-")[1].padStart(2, "0")}`;
+        return {
+          ...(value as Record<string, unknown>),
+          month: monthToken,
+        };
+      });
+    }
+
+    return [];
+  })();
   const reference = parseMonthToken(baseMonth) || new Date();
   const userStart = parseMonthToken(startMonth);
   const fallbackStart = subMonths(reference, 5);
@@ -207,10 +272,32 @@ function normalizeEvolutionRows(
   for (const row of rows) {
     if (!row || typeof row !== "object") continue;
     const record = row as Record<string, unknown>;
+    const yearValue = toNumber(
+      record.year ?? record.referenceYear ?? record.ano ?? record.y,
+    );
+    const monthValue = toNumber(
+      record.monthNumber ??
+        record.monthIndex ??
+        record.monthValue ??
+        record.mesNumero ??
+        record.mes ??
+        (typeof record.month === "number" ? record.month : null),
+    );
+    const hasYearMonthPair =
+      yearValue >= 1900 &&
+      yearValue <= 3000 &&
+      monthValue >= 1 &&
+      monthValue <= 12;
+    const tokenFromYearMonth = hasYearMonthPair
+      ? `${Math.trunc(yearValue)}-${String(Math.trunc(monthValue)).padStart(2, "0")}`
+      : null;
+
     const rawMonth =
       (typeof record.month === "string" && record.month) ||
       (typeof record.referenceMonth === "string" && record.referenceMonth) ||
       (typeof record.period === "string" && record.period) ||
+      (typeof record.monthLabel === "string" && record.monthLabel) ||
+      (typeof record.label === "string" && record.label) ||
       (typeof record.date === "string" && record.date) ||
       "";
 
@@ -219,19 +306,41 @@ function normalizeEvolutionRows(
     const fallbackToken =
       labelTokenPairs.find((pair) => textMonth.startsWith(pair.label))?.token ||
       null;
-    const token = tokenMatch ? tokenMatch[0] : fallbackToken;
+    const token = tokenMatch
+      ? tokenMatch[0]
+      : tokenFromYearMonth || fallbackToken;
     if (!token) continue;
 
     const renda = toNumber(
-      record.renda ?? record.income ?? record.totalIncomes,
+      record.renda ??
+        record.income ??
+        record.totalIncomes ??
+        record.totalIncome ??
+        record.receita ??
+        record.receitas ??
+        record.revenue ??
+        record.incomeAmount,
     );
     const despesas = toNumber(
-      record.despesas ?? record.expenses ?? record.totalExpenses,
+      record.despesas ??
+        record.expenses ??
+        record.totalExpenses ??
+        record.totalExpense ??
+        record.despesa ??
+        record.gastos ??
+        record.spent ??
+        record.expenseAmount,
     );
-    const saldo = toNumber(record.saldo ?? record.balance ?? renda - despesas);
+    const saldo = toNumber(
+      record.saldo ??
+        record.balance ??
+        record.net ??
+        record.netAmount ??
+        renda - despesas,
+    );
 
     monthMap.set(token, {
-      month: monthLabel(new Date(`${token}-01`)),
+      month: monthLabel(parseMonthToken(token) || new Date()),
       renda,
       despesas,
       saldo,
@@ -318,24 +427,100 @@ function normalizePaymentMethodRows(data: unknown): PaymentMethodData[] {
 
 function normalizeCategoryRows(data: unknown): CategoryData[] {
   if (!Array.isArray(data)) return [];
-  return data
-    .map((item, index) => {
-      if (!item || typeof item !== "object") return null;
-      const record = item as Record<string, unknown>;
-      const name =
-        (typeof record.name === "string" && record.name) ||
-        (typeof record.category === "string" && record.category) ||
-        "Outros";
-      const value = toNumber(record.value ?? record.amount ?? record.total);
-      const color =
-        (typeof record.color === "string" && record.color) ||
-        ["#21C25E", "#15803d", "#4ade80", "#166534", "#86efac"][index % 5];
-      return { name, value, color };
-    })
-    .filter(
-      (row): row is CategoryData =>
-        row !== null && Number.isFinite(row.value) && row.value > 0,
+  const palette = ["#21C25E", "#15803d", "#4ade80", "#166534", "#86efac"];
+  const grouped = new Map<
+    string,
+    { categoryId?: string; name: string; value: number; color?: string }
+  >();
+
+  for (const item of data) {
+    if (!item || typeof item !== "object") continue;
+    const record = item as Record<string, unknown>;
+    const categoryField =
+      record.category && typeof record.category === "object"
+        ? (record.category as Record<string, unknown>)
+        : null;
+
+    const name =
+      (typeof record.name === "string" && record.name.trim()) ||
+      (typeof record.categoryName === "string" && record.categoryName.trim()) ||
+      (typeof record.label === "string" && record.label.trim()) ||
+      (typeof record.category === "string" && record.category.trim()) ||
+      (typeof categoryField?.name === "string" && categoryField.name.trim()) ||
+      (typeof categoryField?.label === "string" &&
+        categoryField.label.trim()) ||
+      "Outros";
+    const categoryId =
+      (typeof record.categoryId === "string" && record.categoryId.trim()) ||
+      (typeof categoryField?.id === "string" && categoryField.id.trim()) ||
+      undefined;
+
+    const value = toNumber(
+      record.value ??
+        record.amount ??
+        record.total ??
+        record.totalAmount ??
+        record.expenseTotal,
     );
+    if (!Number.isFinite(value) || value <= 0) continue;
+
+    const color =
+      (typeof record.color === "string" && record.color) ||
+      (typeof categoryField?.color === "string" && categoryField.color) ||
+      undefined;
+
+    const key = categoryId || name.toLowerCase();
+    const previous = grouped.get(key);
+    grouped.set(key, {
+      categoryId: previous?.categoryId || categoryId,
+      name,
+      value: (previous?.value || 0) + value,
+      color: previous?.color || color,
+    });
+  }
+
+  return Array.from(grouped.values()).map((dataRow, index) => ({
+    categoryId: dataRow.categoryId,
+    name: dataRow.name,
+    value: dataRow.value,
+    color: dataRow.color || palette[index % palette.length],
+  }));
+}
+
+type CategoryColorEntry = {
+  id?: string;
+  name: string;
+  color?: string;
+};
+
+async function getExpenseCategories(): Promise<CategoryColorEntry[]> {
+  try {
+    const data = await getWithFallback<unknown>(["/categories"], {
+      type: "EXPENSE",
+    });
+    const list = Array.isArray(data)
+      ? data
+      : data && typeof data === "object"
+        ? ((data as Record<string, unknown>).items as unknown)
+        : [];
+    if (!Array.isArray(list)) return [];
+    const parsed: CategoryColorEntry[] = [];
+    for (const item of list) {
+      if (!item || typeof item !== "object") continue;
+      const record = item as Record<string, unknown>;
+      const id =
+        (typeof record.id === "string" && record.id.trim()) || undefined;
+      const name =
+        (typeof record.name === "string" && record.name.trim()) || "";
+      const color =
+        (typeof record.color === "string" && record.color.trim()) || undefined;
+      if (!name) continue;
+      parsed.push({ id, name, color });
+    }
+    return parsed;
+  } catch {
+    return [];
+  }
 }
 
 function normalizePersonRows(data: unknown): PersonData[] {
@@ -372,7 +557,7 @@ type RawExpense = {
   paymentMethod?: string;
   type?: string;
   person?: string;
-  category?: string | { name?: string };
+  category?: string | { id?: string; name?: string; color?: string };
   categoryData?: { name?: string; color?: string };
 };
 
@@ -417,20 +602,92 @@ const buildWindowMonths = (baseMonth?: string, startMonth?: string): Date[] => {
   return Array.from({ length: 6 }, (_, i) => addMonths(windowStart, i));
 };
 
-async function getExpensesRaw(): Promise<RawExpense[]> {
-  const data = await getWithFallback<RawExpense[]>(["/expenses"]);
-  return Array.isArray(data) ? data : [];
+const buildMonthlyEvolutionFromRaw = (
+  expenses: RawExpense[],
+  incomes: RawIncome[],
+  month?: string,
+  startMonth?: string,
+): MonthlyEvolution[] => {
+  const months = buildWindowMonths(month, startMonth);
+  return months.map((monthDate) => {
+    const token = monthToken(monthDate);
+    const despesas = expenses
+      .filter((item) => monthKey(item.date) === token)
+      .reduce((acc, item) => acc + toNumber(item.amount), 0);
+    const renda = incomes
+      .filter((item) => monthKey(item.date) === token)
+      .reduce((acc, item) => acc + toNumber(item.amount), 0);
+    return {
+      month: monthLabel(monthDate),
+      despesas,
+      renda,
+      saldo: renda - despesas,
+    };
+  });
+};
+
+const buildAllMonthsEvolution = (
+  expenses: RawExpense[],
+  incomes: RawIncome[],
+): MonthlyEvolution[] => {
+  const tokenSet = new Set<string>();
+  for (const item of expenses) {
+    const token = monthKey(item.date);
+    if (/^\d{4}-\d{2}$/.test(token)) tokenSet.add(token);
+  }
+  for (const item of incomes) {
+    const token = monthKey(item.date);
+    if (/^\d{4}-\d{2}$/.test(token)) tokenSet.add(token);
+  }
+  const tokens = Array.from(tokenSet).sort();
+  if (tokens.length === 0) return [];
+
+  return tokens.map((token) => {
+    const monthDate = parseMonthToken(token) || new Date();
+    const despesas = expenses
+      .filter((item) => monthKey(item.date) === token)
+      .reduce((acc, item) => acc + toNumber(item.amount), 0);
+    const renda = incomes
+      .filter((item) => monthKey(item.date) === token)
+      .reduce((acc, item) => acc + toNumber(item.amount), 0);
+    return {
+      month: monthLabel(monthDate),
+      despesas,
+      renda,
+      saldo: renda - despesas,
+    };
+  });
+};
+
+async function getExpensesRaw(
+  view?: DataScope | ViewMode,
+): Promise<RawExpense[]> {
+  const data = await getWithFallback<unknown>(["/expenses"], {
+    view: toDataScope(view),
+    pageSize: 10000,
+  });
+  if (Array.isArray(data)) return data as RawExpense[];
+  if (!data || typeof data !== "object") return [];
+  const record = data as Record<string, unknown>;
+  return Array.isArray(record.items) ? (record.items as RawExpense[]) : [];
 }
 
-async function getIncomesRaw(): Promise<RawIncome[]> {
-  const data = await getWithFallback<RawIncome[]>(["/incomes"]);
+async function getIncomesRaw(
+  view?: DataScope | ViewMode,
+): Promise<RawIncome[]> {
+  const data = await getWithFallback<RawIncome[]>(["/incomes"], {
+    view: toDataScope(view),
+  });
   return Array.isArray(data) ? data : [];
 }
 
 export const summaryService = {
-  getSummary: async (month?: string): Promise<DashboardSummary> => {
+  getSummary: async (
+    month?: string,
+    view?: DataScope | ViewMode,
+  ): Promise<DashboardSummary> => {
     try {
-      const params = month ? { month } : undefined;
+      const params = { ...(month ? { month } : {}), view: toDataScope(view) };
       const data = await getWithFallback<unknown>(
         ["/summary", "/summary/", "/dashboard/summary"],
         params,
@@ -440,8 +697,8 @@ export const summaryService = {
       console.error("Erro ao buscar resumo do dashboard", error);
       try {
         const [expenses, incomes] = await Promise.all([
-          getExpensesRaw(),
-          getIncomesRaw(),
+          getExpensesRaw(view),
+          getIncomesRaw(view),
         ]);
         const monthExpenses = expenses.filter((expense) =>
           isFromMonth(expense.date, month),
@@ -502,12 +759,47 @@ export const summaryService = {
     }
   },
 
+  getDashboardInit: async (
+    month?: string,
+    view?: DataScope | ViewMode,
+  ): Promise<DashboardInitData> => {
+    try {
+      const params = { ...(month ? { month } : {}), view: toDataScope(view) };
+      const response = await getWithFallback<unknown>(
+        ["/summary/dashboard-init"],
+        params,
+      );
+      const record = (response && typeof response === "object" ? response : {}) as Record<string, unknown>;
+      return {
+        summary: normalizeSummary(record.summary),
+        recentExpenses: Array.isArray(record.recentExpenses) ? record.recentExpenses : [],
+        recentIncomes: Array.isArray(record.recentIncomes) ? record.recentIncomes : [],
+      };
+    } catch (error) {
+      console.warn("dashboard-init não disponível, fallback para chamadas separadas", error);
+      const [summary, expenses, incomes] = await Promise.all([
+        summaryService.getSummary(month, view),
+        getExpensesRaw(view),
+        getIncomesRaw(view),
+      ]);
+      const monthFilter = (date?: string) => !month || String(date || "").slice(0, 7) === month;
+      const filteredExpenses = expenses.filter(e => monthFilter(e.date));
+      const filteredIncomes = incomes.filter(i => monthFilter(i.date));
+      return {
+        summary,
+        recentExpenses: filteredExpenses.slice(0, 5) as unknown as Array<Record<string, unknown>>,
+        recentIncomes: filteredIncomes.slice(0, 5) as unknown as Array<Record<string, unknown>>,
+      };
+    }
+  },
+
   getMonthlyEvolution: async (
     month?: string,
     startMonth?: string,
+    view?: DataScope | ViewMode,
   ): Promise<MonthlyEvolution[]> => {
     try {
-      const params = month ? { month } : undefined;
+      const params = { ...(month ? { month } : {}), view: toDataScope(view) };
       const data = await getWithFallback<unknown>(
         [
           "/summary/monthly-evolution",
@@ -516,67 +808,150 @@ export const summaryService = {
         ],
         params,
       );
-      return normalizeEvolutionRows(data, month, startMonth);
+      const normalized = normalizeEvolutionRows(data, month, startMonth);
+      const hasNonZeroValue = normalized.some(
+        (row) =>
+          toNumber(row.despesas) !== 0 ||
+          toNumber(row.renda) !== 0 ||
+          toNumber(row.saldo) !== 0,
+      );
+      if (hasNonZeroValue) return normalized;
+
+      const [expenses, incomes] = await Promise.all([
+        getExpensesRaw(view),
+        getIncomesRaw(view),
+      ]);
+      const fallback = buildMonthlyEvolutionFromRaw(
+        expenses,
+        incomes,
+        month,
+        startMonth,
+      );
+      const fallbackHasNonZero = fallback.some(
+        (row) =>
+          toNumber(row.despesas) !== 0 ||
+          toNumber(row.renda) !== 0 ||
+          toNumber(row.saldo) !== 0,
+      );
+      return fallbackHasNonZero ? fallback : normalized;
     } catch (error) {
       console.error("Erro ao buscar evolução mensal", error);
       try {
         const [expenses, incomes] = await Promise.all([
-          getExpensesRaw(),
-          getIncomesRaw(),
+          getExpensesRaw(view),
+          getIncomesRaw(view),
         ]);
-        const months = buildWindowMonths(month, startMonth);
-        return months.map((monthDate) => {
-          const token = monthToken(monthDate);
-          const despesas = expenses
-            .filter((item) => monthKey(item.date) === token)
-            .reduce((acc, item) => acc + toNumber(item.amount), 0);
-          const renda = incomes
-            .filter((item) => monthKey(item.date) === token)
-            .reduce((acc, item) => acc + toNumber(item.amount), 0);
-          return {
-            month: monthLabel(monthDate),
-            despesas,
-            renda,
-            saldo: renda - despesas,
-          };
-        });
+        return buildMonthlyEvolutionFromRaw(
+          expenses,
+          incomes,
+          month,
+          startMonth,
+        );
       } catch {
         return normalizeEvolutionRows([], month, startMonth);
       }
     }
   },
 
-  getByCategory: async (month?: string): Promise<CategoryData[]> => {
+  getAllMonthlyEvolution: async (
+    view?: DataScope | ViewMode,
+  ): Promise<MonthlyEvolution[]> => {
     try {
-      const params = month ? { month } : undefined;
+      const [expenses, incomes] = await Promise.all([
+        getExpensesRaw(view),
+        getIncomesRaw(view),
+      ]);
+      return buildAllMonthsEvolution(expenses, incomes);
+    } catch (error) {
+      console.error("Erro ao buscar evolução mensal completa", error);
+      return [];
+    }
+  },
+
+  getByCategory: async (
+    month?: string,
+    view?: DataScope | ViewMode,
+  ): Promise<CategoryData[]> => {
+    try {
+      const params = { ...(month ? { month } : {}), view: toDataScope(view) };
       const data = await getWithFallback<unknown>(
         ["/summary/by-category", "/dashboard/by-category"],
         params,
       );
-      return normalizeCategoryRows(data);
+      const normalized = normalizeCategoryRows(data);
+      if (normalized.length === 0) return normalized;
+      const categories = await getExpenseCategories();
+      if (categories.length === 0) return normalized;
+
+      const byId = new Map<string, string>();
+      const byName = new Map<string, string>();
+      for (const category of categories) {
+        if (category.id && category.color)
+          byId.set(category.id, category.color);
+        if (category.name && category.color) {
+          byName.set(category.name.trim().toLowerCase(), category.color);
+        }
+      }
+
+      return normalized.map((row) => ({
+        ...row,
+        color:
+          (row.categoryId ? byId.get(row.categoryId) : undefined) ||
+          byName.get(row.name.trim().toLowerCase()) ||
+          row.color,
+      }));
     } catch (error) {
       console.error("Erro ao buscar categorias", error);
       try {
-        const expenses = await getExpensesRaw();
+        const expenses = await getExpensesRaw(view);
         const monthExpenses = expenses.filter((expense) =>
           isFromMonth(expense.date, month),
         );
-        const grouped = new Map<string, number>();
+        const grouped = new Map<
+          string,
+          { name: string; value: number; color?: string }
+        >();
         for (const item of monthExpenses) {
+          const categoryObject =
+            item.category && typeof item.category === "object"
+              ? item.category
+              : null;
+          const nameFromCategoryData = item.categoryData?.name;
+          const nameFromCategoryObject = categoryObject?.name;
+          const nameFromCategoryString =
+            typeof item.category === "string" ? item.category : undefined;
           const name =
-            item.categoryData?.name ||
-            (typeof item.category === "object"
-              ? item.category?.name
-              : item.category) ||
+            nameFromCategoryData ||
+            nameFromCategoryObject ||
+            nameFromCategoryString ||
             "Outros";
-          grouped.set(name, (grouped.get(name) || 0) + toNumber(item.amount));
+          const color =
+            item.categoryData?.color ||
+            (categoryObject ? categoryObject.color : undefined);
+          const key = name.toLowerCase();
+          const previous = grouped.get(key);
+          grouped.set(key, {
+            name,
+            value: (previous?.value || 0) + toNumber(item.amount),
+            color: previous?.color || color,
+          });
         }
-        return Array.from(grouped.entries()).map(([name, value], index) => ({
-          name,
-          value,
-          color: ["#21C25E", "#15803d", "#4ade80", "#166534", "#86efac"][
-            index % 5
-          ],
+        const categories = await getExpenseCategories();
+        const byName = new Map(
+          categories
+            .filter((category) => category.color)
+            .map((category) => [
+              category.name.trim().toLowerCase(),
+              category.color as string,
+            ]),
+        );
+        return Array.from(grouped.values()).map((item, index) => ({
+          name: item.name,
+          value: item.value,
+          color:
+            item.color ||
+            byName.get(item.name.trim().toLowerCase()) ||
+            ["#21C25E", "#15803d", "#4ade80", "#166534", "#86efac"][index % 5],
         }));
       } catch {
         return [];
@@ -584,9 +959,12 @@ export const summaryService = {
     }
   },
 
-  getByPaymentMethod: async (month?: string): Promise<PaymentMethodData[]> => {
+  getByPaymentMethod: async (
+    month?: string,
+    view?: DataScope | ViewMode,
+  ): Promise<PaymentMethodData[]> => {
     try {
-      const params = month ? { month } : undefined;
+      const params = { ...(month ? { month } : {}), view: toDataScope(view) };
       const data = await getWithFallback<unknown>(
         ["/summary/by-payment-method", "/dashboard/by-payment-method"],
         params,
@@ -595,7 +973,7 @@ export const summaryService = {
     } catch (error) {
       console.error("Erro ao buscar métodos de pagamento", error);
       try {
-        const expenses = await getExpensesRaw();
+        const expenses = await getExpensesRaw(view);
         const monthExpenses = expenses.filter((expense) =>
           isFromMonth(expense.date, month),
         );
@@ -617,9 +995,12 @@ export const summaryService = {
     }
   },
 
-  getByPerson: async (month?: string): Promise<PersonData[]> => {
+  getByPerson: async (
+    month?: string,
+    view?: DataScope | ViewMode,
+  ): Promise<PersonData[]> => {
     try {
-      const params = month ? { month } : undefined;
+      const params = { ...(month ? { month } : {}), view: toDataScope(view) };
       const data = await getWithFallback<unknown>(
         ["/summary/by-person", "/dashboard/by-person"],
         params,
@@ -628,7 +1009,7 @@ export const summaryService = {
     } catch (error) {
       console.error("Erro ao buscar dados por pessoa", error);
       try {
-        const expenses = await getExpensesRaw();
+        const expenses = await getExpensesRaw(view);
         const monthExpenses = expenses.filter((expense) =>
           isFromMonth(expense.date, month),
         );
@@ -648,9 +1029,12 @@ export const summaryService = {
     }
   },
 
-  getDailySpending: async (month?: string): Promise<DailySpending[]> => {
+  getDailySpending: async (
+    month?: string,
+    view?: DataScope | ViewMode,
+  ): Promise<DailySpending[]> => {
     try {
-      const params = month ? { month } : undefined;
+      const params = { ...(month ? { month } : {}), view: toDataScope(view) };
       return await getWithFallback<DailySpending[]>(
         ["/summary/daily-spending", "/dashboard/daily-spending"],
         params,
@@ -658,7 +1042,7 @@ export const summaryService = {
     } catch (error) {
       console.error("Erro ao buscar gastos diários", error);
       try {
-        const expenses = await getExpensesRaw();
+        const expenses = await getExpensesRaw(view);
         const monthExpenses = expenses.filter((expense) =>
           isFromMonth(expense.date, month),
         );

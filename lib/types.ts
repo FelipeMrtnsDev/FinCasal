@@ -6,12 +6,15 @@ export type PaymentMethod =
   | "outro";
 export type ExpenseType = "fixo" | "variavel";
 export type ViewMode = "individual" | "casal";
+export type DataScope = "INDIVIDUAL" | "COUPLE";
 export type Person = "eu" | "parceiro";
+export type CategoryType = "EXPENSE" | "SALE";
 
 export interface Category {
   id: string;
   name: string;
   color: string;
+  type?: CategoryType;
 }
 
 export interface Expense {
@@ -90,15 +93,15 @@ export interface FinanceState {
 }
 
 export const DEFAULT_CATEGORIES: Category[] = [
-  { id: "alimentacao", name: "Alimentacao", color: "#21C25E" },
-  { id: "transporte", name: "Transporte", color: "#1a9e4b" },
-  { id: "moradia", name: "Moradia", color: "#15803d" },
-  { id: "lazer", name: "Lazer", color: "#4ade80" },
-  { id: "saude", name: "Saude", color: "#86efac" },
-  { id: "educacao", name: "Educacao", color: "#166534" },
-  { id: "roupas", name: "Roupas", color: "#bbf7d0" },
-  { id: "assinaturas", name: "Assinaturas", color: "#0d9488" },
-  { id: "outros", name: "Outros", color: "#6b7280" },
+  { id: "alimentacao", name: "Alimentacao", color: "#21C25E", type: "EXPENSE" },
+  { id: "transporte", name: "Transporte", color: "#1a9e4b", type: "EXPENSE" },
+  { id: "moradia", name: "Moradia", color: "#15803d", type: "EXPENSE" },
+  { id: "lazer", name: "Lazer", color: "#4ade80", type: "EXPENSE" },
+  { id: "saude", name: "Saude", color: "#86efac", type: "EXPENSE" },
+  { id: "educacao", name: "Educacao", color: "#166534", type: "EXPENSE" },
+  { id: "roupas", name: "Roupas", color: "#bbf7d0", type: "EXPENSE" },
+  { id: "assinaturas", name: "Assinaturas", color: "#0d9488", type: "EXPENSE" },
+  { id: "outros", name: "Outros", color: "#6b7280", type: "EXPENSE" },
 ];
 
 export const PAYMENT_METHODS: { value: PaymentMethod; label: string }[] = [
@@ -117,6 +120,10 @@ export interface User {
 }
 
 export interface AuthResponse {
-  user: User;
-  token: string;
+  user?: User;
+  token?: string;
+  paymentRequired?: boolean;
+  onboardingToken?: string;
+  dashboardId?: string;
+  [key: string]: unknown;
 }

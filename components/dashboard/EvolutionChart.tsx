@@ -32,7 +32,7 @@ export function EvolutionChart({ data }: EvolutionChartProps) {
   return (
     <div className="flex flex-col gap-6">
       <div>
-        <p className="text-sm font-medium text-foreground mb-3">Renda vs Despesas (6 meses)</p>
+        <p className="text-sm font-medium text-foreground mb-3">Renda vs Despesas</p>
         <div className="h-64">
           <ResponsiveContainer width="100%" height="100%">
             <BarChart data={data}>

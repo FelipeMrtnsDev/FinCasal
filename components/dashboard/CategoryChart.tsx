@@ -34,6 +34,7 @@ export function CategoryChart({ data, totalExpenses }: CategoryChartProps) {
   // Se não houver dados, cria um item "Sem dados" para mostrar o gráfico vazio
   const chartData = data.length > 0 ? data : [{ name: "Sem dados", value: 1, color: "#374151" }]
   const hasData = data.length > 0
+  const rankingData = hasData ? [...data].sort((a, b) => b.value - a.value) : []
 
   return (
     <div className="flex flex-col gap-6">
@@ -54,10 +55,10 @@ export function CategoryChart({ data, totalExpenses }: CategoryChartProps) {
           </div>
           <div className="flex flex-col gap-2.5 flex-1 min-w-0 w-full">
             {hasData ? (
-              data.map((cat) => {
+              data.map((cat, i) => {
                 const percent = totalExpenses > 0 ? ((cat.value / totalExpenses) * 100).toFixed(1) : "0"
                 return (
-                  <div key={cat.name} className="flex items-center gap-3">
+                  <div key={`${cat.name}-${cat.color}-${i}`} className="flex items-center gap-3">
                     <div className="w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: cat.color }} />
                     <span className="text-sm text-foreground truncate flex-1">{cat.name}</span>
                     <span className="text-xs text-muted-foreground font-mono">{percent}%</span>
@@ -75,10 +76,10 @@ export function CategoryChart({ data, totalExpenses }: CategoryChartProps) {
         <p className="text-sm font-medium text-foreground mb-3">Ranking de gastos</p>
         <div className="flex flex-col gap-3">
           {hasData ? (
-            data.sort((a, b) => b.value - a.value).map((cat, i) => {
-              const maxValue = data[0]?.value || 1
+            rankingData.map((cat, i) => {
+              const maxValue = rankingData[0]?.value || 1
               return (
-                <div key={cat.name} className="flex items-center gap-3">
+                <div key={`${cat.name}-${cat.color}-rank-${i}`} className="flex items-center gap-3">
                   <span className="text-xs font-mono text-muted-foreground w-5 text-right">{i + 1}.</span>
                   <span className="text-sm text-foreground w-28 truncate">{cat.name}</span>
                   <div className="flex-1 h-3 rounded-full bg-muted overflow-hidden">

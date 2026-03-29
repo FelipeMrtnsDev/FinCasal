@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react"
 import { useRouter, usePathname } from "next/navigation"
 import { Loader2 } from "lucide-react"
+import { authSession } from "@/lib/authSession"
 
 export function AuthGuard({ children }: { children: React.ReactNode }) {
   const router = useRouter()
@@ -10,20 +11,44 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
   const [authorized, setAuthorized] = useState(false)
 
   useEffect(() => {
-    // Rotas públicas que não precisam de verificação
     const publicRoutes = ['/login', '/registro', '/auth/callback']
-    if (publicRoutes.some(route => pathname.startsWith(route))) {
+    const onboardingRoutes = ['/plans', '/checkout', '/assinatura']
+    const isPublicRoute = publicRoutes.some(route => pathname.startsWith(route))
+    const isOnboardingRoute = onboardingRoutes.some(route => pathname.startsWith(route))
+    const isAuthRoute = pathname.startsWith('/login') || pathname.startsWith('/registro')
+
+    if (isPublicRoute) {
       setAuthorized(true)
       return
     }
 
-    const token =
-      localStorage.getItem('token') ||
-      document.cookie
-        .split('; ')
-        .find((cookie) => cookie.startsWith('auth_token='))
-        ?.split('=')[1]
-    if (!token) {
+    const finalToken = authSession.getFinalToken()
+    const onboardingToken = authSession.getOnboardingToken()
+
+    if (finalToken) {
+      if (isAuthRoute || isOnboardingRoute) {
+        router.replace('/')
+        return
+      }
+      setAuthorized(true)
+      return
+    }
+
+    if (onboardingToken) {
+      if (isOnboardingRoute) {
+        setAuthorized(true)
+        return
+      }
+      router.replace('/plans')
+      return
+    }
+
+    if (isOnboardingRoute) {
+      router.replace('/login')
+      return
+    }
+
+    if (!isPublicRoute) {
       router.push('/login')
     } else {
       setAuthorized(true)

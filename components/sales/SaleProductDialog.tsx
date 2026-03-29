@@ -1,6 +1,7 @@
 "use client"
 
 import { useEffect, useState } from "react"
+import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
@@ -9,7 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { categoryService } from "@/services/financeService"
 import { Category } from "@/lib/types"
 import { SaleProduct } from "./types"
-import { Loader2 } from "lucide-react"
+import { HelpCircle, Loader2 } from "lucide-react"
 
 type SaleProductDialogProps = {
   open: boolean
@@ -47,7 +48,7 @@ export function SaleProductDialog({ open, onOpenChange, editingProduct, onSave }
     const loadCategories = async () => {
       setLoadingCategories(true)
       try {
-        const data = await categoryService.getAll()
+        const data = await categoryService.getAll("SALE")
         setCategories(data || [])
       } finally {
         setLoadingCategories(false)
@@ -105,6 +106,13 @@ export function SaleProductDialog({ open, onOpenChange, editingProduct, onSave }
                 ))}
               </SelectContent>
             </Select>
+            <Link
+              href="/configuracoes#categorias"
+              className="inline-flex items-center gap-1 text-xs text-primary hover:underline underline-offset-4"
+            >
+              <HelpCircle className="w-3.5 h-3.5" />
+              Como cadastrar categorias?
+            </Link>
           </div>
           <div className="grid grid-cols-2 gap-4">
             <div className="flex flex-col gap-2">

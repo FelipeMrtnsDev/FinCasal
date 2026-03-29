@@ -7,6 +7,7 @@ import { Label } from "@/components/ui/label"
 import { Eye, EyeOff, ArrowRight, Loader2 } from "lucide-react"
 import { motion } from "framer-motion"
 import { authService } from "@/services/authService"
+import { authSession } from "@/lib/authSession"
 
 export function RegisterForm() {
   const [showPassword, setShowPassword] = useState(false)
@@ -33,12 +34,31 @@ export function RegisterForm() {
     setLoading(true)
 
     try {
-      await authService.register({
+      const response = await authService.register({
         name: form.name,
         email: form.email,
         password: form.password,
       })
-      window.location.href = "/"
+      const flow = authSession.resolveAuthFlow(response)
+
+      if (flow.kind === "final") {
+        authSession.persistFinalToken(flow.token)
+        localStorage.removeItem("payment_required")
+        window.location.href = "/"
+        return
+      }
+
+      if (flow.kind === "onboarding") {
+        authSession.persistOnboardingSession({
+          onboardingToken: flow.onboardingToken,
+          dashboardId: flow.dashboardId,
+          user: flow.user,
+        })
+        window.location.href = "/plans"
+        return
+      }
+
+      setError("Não foi possível iniciar seu onboarding")
     } catch (err: any) {
       console.error(err)
       setError(err.response?.data?.message || "Erro ao criar conta")

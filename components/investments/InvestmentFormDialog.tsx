@@ -31,7 +31,7 @@ type InvestmentFormDialogProps = {
 }
 
 export function InvestmentFormDialog({ open, onOpenChange, onSubmit }: InvestmentFormDialogProps) {
-  const { personNames } = useFinance()
+  const { personNames, viewMode } = useFinance()
   const [submitting, setSubmitting] = useState(false)
   const [form, setForm] = useState({
     description: "",
@@ -135,18 +135,20 @@ export function InvestmentFormDialog({ open, onOpenChange, onSubmit }: Investmen
               <Input type="date" value={form.date} onChange={(e) => setForm({ ...form, date: e.target.value })} />
             </div>
           </div>
-          <div className="flex flex-col gap-2">
-            <Label>Pessoa</Label>
-            <Select value={form.person} onValueChange={(v) => setForm({ ...form, person: v as Person })}>
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="eu">{personNames.eu}</SelectItem>
-                <SelectItem value="parceiro">{personNames.parceiro}</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
+          {viewMode === "casal" && (
+            <div className="flex flex-col gap-2">
+              <Label>Pessoa</Label>
+              <Select value={form.person} onValueChange={(v) => setForm({ ...form, person: v as Person })}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="eu">{personNames.eu}</SelectItem>
+                  <SelectItem value="parceiro">{personNames.parceiro}</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          )}
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)} disabled={submitting}>
