@@ -1,27 +1,31 @@
 "use client"
 
-import React, { useState } from "react"
+import React, { useEffect, useState } from "react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import {
   LayoutDashboard,
   Receipt,
   Wallet,
-  TrendingUp,
+  Tag,
   PiggyBank,
   Settings,
   ChevronLeft,
   ChevronRight,
+  Lock,
+  LogOut,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { useFinance } from "@/lib/finance-context"
 import { Button } from "@/components/ui/button"
+import { dashboardService } from "@/services/financeService"
+import { authService } from "@/services/authService"
 
 const navItems = [
   { href: "/", label: "Painel", icon: LayoutDashboard },
   { href: "/despesas", label: "Despesas", icon: Receipt },
   { href: "/renda", label: "Renda", icon: Wallet },
-  { href: "/investimentos", label: "Investimentos", icon: TrendingUp },
+  { href: "/investimentos", label: "Vendas", icon: Tag },
   { href: "/projecao", label: "Projecao", icon: PiggyBank },
 ]
 
@@ -29,14 +33,106 @@ const mobileNavItems = [
   { href: "/", label: "Painel", icon: LayoutDashboard },
   { href: "/despesas", label: "Despesas", icon: Receipt },
   { href: "/renda", label: "Renda", icon: Wallet },
-  { href: "/investimentos", label: "Investir", icon: TrendingUp },
+  { href: "/investimentos", label: "Vendas", icon: Tag },
   { href: "/projecao", label: "Metas", icon: PiggyBank },
 ]
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const [collapsed, setCollapsed] = useState(false)
   const pathname = usePathname()
-  const { viewMode, setViewMode, personNames } = useFinance()
+  const { viewMode, setViewMode, personNames, setViewModeReady } = useFinance()
+  const [canUseCoupleMode, setCanUseCoupleMode] = useState(false)
+  const [isLoggedOut, setIsLoggedOut] = useState(false)
+
+  useEffect(() => {
+    // Basic check for token existence on mount
+    const tokenFromStorage = localStorage.getItem("token");
+    const tokenFromCookie = document.cookie
+      .split("; ")
+      .find((cookie) => cookie.startsWith("auth_token="));
+
+    if (!tokenFromStorage && !tokenFromCookie) {
+      setIsLoggedOut(true);
+      setViewModeReady(true);
+      return;
+    }
+
+    let mounted = true
+    const checkDashboardMembers = async () => {
+      try {
+        const dashboardData = await dashboardService.get()
+        const record = (dashboardData || {}) as Record<string, unknown>
+        const users =
+          (Array.isArray(record.users) && record.users) ||
+          (Array.isArray(record.members) && record.members) ||
+          (Array.isArray(record.dashboardMembers) && record.dashboardMembers) ||
+          []
+        const hasPartner =
+          users.length >= 2 ||
+          (typeof record.partnerId === "string" && record.partnerId.trim().length > 0) ||
+          (typeof record.partnerEmail === "string" && record.partnerEmail.trim().length > 0)
+        if (mounted) {
+          setCanUseCoupleMode(hasPartner)
+          if (hasPartner) {
+            // Restore saved viewMode from localStorage if user has a partner
+            try {
+              const saved = localStorage.getItem("finance-app-data")
+              if (saved) {
+                const parsed = JSON.parse(saved)
+                if (parsed.viewMode === "casal") {
+                  setViewMode("casal")
+                }
+              }
+            } catch {
+              // ignore parse errors
+            }
+          } else if (viewMode === "casal") {
+            setViewMode("individual")
+          }
+          setViewModeReady(true)
+        }
+      } catch (error: any) {
+        if (error?.response?.status === 401 || error?.response?.status === 403) {
+          if (mounted) setIsLoggedOut(true);
+        }
+        if (mounted) {
+          setCanUseCoupleMode(false)
+          if (viewMode === "casal") {
+            setViewMode("individual")
+          }
+          setViewModeReady(true)
+        }
+      }
+    }
+    if (!isLoggedOut) {
+      checkDashboardMembers()
+    }
+    return () => {
+      mounted = false
+    }
+  }, [setViewMode, viewMode, isLoggedOut, setViewModeReady])
+
+  const handleLogout = async () => {
+    await authService.logout()
+    window.location.href = "/login"
+  }
+
+  if (isLoggedOut) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-dvh bg-background p-4 text-center">
+        <div className="w-16 h-16 rounded-full bg-muted flex items-center justify-center mb-4">
+          <Lock className="w-8 h-8 text-muted-foreground" />
+        </div>
+        <h2 className="text-2xl font-bold text-foreground mb-2">Acesso Restrito</h2>
+        <p className="text-muted-foreground text-sm max-w-sm mb-6">
+          Você precisa estar logado para acessar esta página. Por favor, faça login para continuar.
+        </p>
+        <Button size="lg" className="px-8" onClick={handleLogout}>
+          Ir para o Login
+        </Button>
+      </div>
+    )
+  }
 
   return (
     <div className="flex h-dvh overflow-hidden bg-background">
@@ -71,14 +167,17 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           <div className="px-3 pb-3">
             <div className="flex rounded-lg bg-sidebar-accent p-1">
               <button
-                onClick={() => setViewMode("casal")}
+                onClick={() => canUseCoupleMode && setViewMode("casal")}
+                disabled={!canUseCoupleMode}
                 className={cn(
-                  "flex-1 text-xs py-1.5 px-2 rounded-md transition-all font-medium",
+                  "flex-1 text-xs py-1.5 px-2 rounded-md transition-all font-medium inline-flex items-center justify-center gap-1",
                   viewMode === "casal"
                     ? "bg-sidebar-primary text-sidebar-primary-foreground"
-                    : "text-sidebar-foreground hover:text-sidebar-primary-foreground"
+                    : "text-sidebar-foreground hover:text-sidebar-primary-foreground",
+                  !canUseCoupleMode && "opacity-60 cursor-not-allowed"
                 )}
               >
+                {!canUseCoupleMode && <Lock className="w-3 h-3" />}
                 Casal
               </button>
               <button
@@ -119,7 +218,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           })}
 
           {/* Settings link - separated at the bottom of nav */}
-          <div className="mt-auto">
+          <div className="mt-auto flex flex-col gap-1">
             <Link
               href="/configuracoes"
               className={cn(
@@ -132,6 +231,14 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               <Settings className="w-5 h-5 shrink-0" />
               {!collapsed && <span>Configuracoes</span>}
             </Link>
+
+            <button
+              onClick={handleLogout}
+              className="flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors text-destructive/70 hover:text-destructive hover:bg-destructive/10"
+            >
+              <LogOut className="w-5 h-5 shrink-0" />
+              {!collapsed && <span>Sair</span>}
+            </button>
           </div>
         </nav>
 
@@ -157,14 +264,17 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           <div className="flex items-center gap-2">
             <div className="flex rounded-lg bg-secondary p-0.5">
               <button
-                onClick={() => setViewMode("casal")}
+                onClick={() => canUseCoupleMode && setViewMode("casal")}
+                disabled={!canUseCoupleMode}
                 className={cn(
-                  "text-xs py-1 px-2.5 rounded-md transition-all font-medium",
+                  "text-xs py-1 px-2.5 rounded-md transition-all font-medium inline-flex items-center gap-1",
                   viewMode === "casal"
                     ? "bg-primary text-primary-foreground"
-                    : "text-muted-foreground"
+                    : "text-muted-foreground",
+                  !canUseCoupleMode && "opacity-60 cursor-not-allowed"
                 )}
               >
+                {!canUseCoupleMode && <Lock className="w-3 h-3" />}
                 Casal
               </button>
               <button

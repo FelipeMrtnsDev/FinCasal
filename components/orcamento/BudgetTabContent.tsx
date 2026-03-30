@@ -1,6 +1,7 @@
 "use client"
 
-import { useCallback, useEffect, useMemo, useState } from "react"
+import { useMemo, useState } from "react"
+import { useQuery, useQueryClient } from "@tanstack/react-query"
 import { format } from "date-fns"
 import { AlertTriangle } from "lucide-react"
 import { TabsContent } from "@/components/ui/tabs"
@@ -14,13 +15,9 @@ import { BudgetSummaryStats } from "./BudgetSummaryStats"
 import { Budget } from "./types"
 import { getBudgetStatus, getMonthOptionsFromStart } from "./utils"
 
-export function BudgetTabContent() {
+export function BudgetTabContent({ active = true }: { active?: boolean }) {
   const { startMonth } = useFinance()
-  const [categories, setCategories] = useState<Category[]>([])
-  const [loadingCategories, setLoadingCategories] = useState(true)
-  const [monthBudgets, setMonthBudgets] = useState<Budget[]>([])
-  const [budgetStatus, setBudgetStatus] = useState<ReturnType<typeof getBudgetStatus>>([])
-  const [loading, setLoading] = useState(true)
+  const queryClient = useQueryClient()
   const [saving, setSaving] = useState(false)
   const [deletingId, setDeletingId] = useState<string | null>(null)
   const [selectedMonth, setSelectedMonth] = useState(format(new Date(), "yyyy-MM"))
@@ -28,32 +25,27 @@ export function BudgetTabContent() {
   const [budgetForm, setBudgetForm] = useState({ categoryId: "", limitAmount: "" })
   const monthOptions = useMemo(() => getMonthOptionsFromStart(startMonth), [startMonth])
 
-  useEffect(() => {
-    const loadCategories = async () => {
-      setLoadingCategories(true)
-      try {
-        const data = await categoryService.getAll()
-        const normalized = (data || []).map((c) => ({
-          ...c,
-          color: c.color || "#21C25E",
-        }))
-        setCategories(normalized)
-      } catch (error) {
-        console.error("Erro ao carregar categorias:", error)
-        setCategories([])
-      } finally {
-        setLoadingCategories(false)
-      }
-    }
-    loadCategories()
-  }, [])
+  // Categories — only load when tab is active
+  const { data: categories = [], isLoading: loadingCategories } = useQuery({
+    queryKey: ["budget-categories"],
+    queryFn: async () => {
+      const data = await categoryService.getAll("EXPENSE")
+      return (data || []).map((c) => ({
+        ...c,
+        color: c.color || "#21C25E",
+      }))
+    },
+    enabled: active,
+    staleTime: 60_000,
+  })
 
-  const loadMonthData = useCallback(async (month: string) => {
-    setLoading(true)
-    try {
+  // Month budgets + status — only load when tab is active
+  const { data: monthData, isLoading: loading } = useQuery({
+    queryKey: ["budgets", selectedMonth],
+    queryFn: async () => {
       const [budgetsData, statusData] = await Promise.all([
-        budgetService.getAll(month),
-        budgetService.getStatus(month),
+        budgetService.getAll(selectedMonth),
+        budgetService.getStatus(selectedMonth),
       ])
       const normalizedBudgets: Budget[] = budgetsData.map((b) => ({
         id: b.id,
@@ -62,20 +54,20 @@ export function BudgetTabContent() {
         limitAmount: Number(b.limitAmount) || 0,
         month: b.month,
       }))
-      setMonthBudgets(normalizedBudgets)
-      setBudgetStatus(getBudgetStatus(statusData, month))
-    } catch (error) {
-      console.error("Erro ao carregar orcamentos:", error)
-      setMonthBudgets([])
-      setBudgetStatus([])
-    } finally {
-      setLoading(false)
-    }
-  }, [])
+      return {
+        budgets: normalizedBudgets,
+        status: getBudgetStatus(statusData, selectedMonth),
+      }
+    },
+    enabled: active,
+  })
 
-  useEffect(() => {
-    loadMonthData(selectedMonth)
-  }, [selectedMonth, loadMonthData])
+  const monthBudgets = monthData?.budgets ?? []
+  const budgetStatus = monthData?.status ?? []
+
+  const invalidateBudgets = () => {
+    queryClient.invalidateQueries({ queryKey: ["budgets"] })
+  }
 
   const totalBudget = monthBudgets.reduce((a, b) => a + b.limitAmount, 0)
   const totalSpentOnBudgets = budgetStatus.reduce((a, b) => a + b.spent, 0)
@@ -101,7 +93,7 @@ export function BudgetTabContent() {
           month: selectedMonth,
         })
       }
-      await loadMonthData(selectedMonth)
+      invalidateBudgets()
       resetBudgetForm()
       setBudgetDialogOpen(false)
     } finally {
@@ -114,7 +106,7 @@ export function BudgetTabContent() {
     setDeletingId(id)
     try {
       await budgetService.delete(id)
-      await loadMonthData(selectedMonth)
+      invalidateBudgets()
     } finally {
       setDeletingId(null)
     }

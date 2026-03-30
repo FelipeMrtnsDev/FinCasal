@@ -10,7 +10,8 @@ import {
 import { format, parseISO } from "date-fns"
 import { ptBR } from "date-fns/locale"
 import { Expense, Category } from "@/lib/types"
-import { CreditCard, Smartphone, Banknote, ArrowLeftRight, HelpCircle, Calendar, User, Tag, FileText } from "lucide-react"
+import { CreditCard, Smartphone, Banknote, ArrowLeftRight, HelpCircle, Calendar, User, Tag, FileText, Pencil, Trash2, Loader2 } from "lucide-react"
+import { Button } from "@/components/ui/button"
 
 interface ExpenseDetailsDialogProps {
   expense: Expense | null
@@ -18,6 +19,9 @@ interface ExpenseDetailsDialogProps {
   onOpenChange: (open: boolean) => void
   categories: Category[]
   personNames: { eu: string; parceiro: string }
+  onEditClick?: () => void
+  onDeleteClick?: () => void
+  isDeleting?: boolean
 }
 
 const paymentIcons: Record<string, typeof CreditCard> = {
@@ -59,7 +63,16 @@ function formatCurrency(value: number) {
   return formatted;
 }
 
-export function ExpenseDetailsDialog({ expense, open, onOpenChange, categories, personNames }: ExpenseDetailsDialogProps) {
+export function ExpenseDetailsDialog({ 
+  expense, 
+  open, 
+  onOpenChange, 
+  categories, 
+  personNames,
+  onEditClick,
+  onDeleteClick,
+  isDeleting
+}: ExpenseDetailsDialogProps) {
   if (!expense) return null
 
   const categoryId = expense.categoryId || (typeof expense.category === 'string' ? expense.category : '');
@@ -176,6 +189,38 @@ export function ExpenseDetailsDialog({ expense, open, onOpenChange, categories, 
                 </div>
               </div>
             </div>
+          </div>
+
+          <div className="flex items-center justify-end gap-2 pt-4 border-t border-border/50 mt-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                onOpenChange(false);
+                if (onEditClick) onEditClick();
+              }}
+              disabled={isDeleting}
+              className="gap-2"
+            >
+              <Pencil className="w-4 h-4" />
+              Editar
+            </Button>
+            <Button
+              variant="destructive"
+              size="sm"
+              onClick={() => {
+                if (onDeleteClick) onDeleteClick();
+              }}
+              disabled={isDeleting}
+              className="gap-2"
+            >
+              {isDeleting ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : (
+                <Trash2 className="w-4 h-4" />
+              )}
+              {isDeleting ? "Excluindo..." : "Excluir"}
+            </Button>
           </div>
         </div>
       </DialogContent>

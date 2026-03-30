@@ -1,41 +1,53 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 import { incomeService } from "@/services/financeService"
-import { Income } from "@/lib/types"
+import { useFinance } from "@/lib/finance-context"
 import { IncomeDialog } from "@/components/incomes/IncomeDialog"
 import { IncomeStats } from "@/components/incomes/IncomeStats"
 import { IncomeList } from "@/components/incomes/IncomeList"
 
 export default function RendaPage() {
-  const [incomes, setIncomes] = useState<Income[]>([])
-  const [loading, setLoading] = useState(true)
+  const { viewMode, viewModeReady } = useFinance()
+  const queryClient = useQueryClient()
 
-  const fetchData = async () => {
-    setLoading(true)
-    try {
-      const data = await incomeService.getAll()
-      console.log("Fetched incomes:", data)
-      setIncomes(data)
-    } catch (error) {
-      console.error("Failed to fetch incomes:", error)
-    } finally {
-      setLoading(false)
-    }
+  const { data: incomes = [], isLoading: loading } = useQuery({
+    queryKey: ["incomes", viewMode],
+    queryFn: () => incomeService.getAll({ view: viewMode }),
+    enabled: viewModeReady,
+  })
+
+  const invalidateIncomes = () => {
+    queryClient.invalidateQueries({ queryKey: ["incomes"] })
+    queryClient.invalidateQueries({ queryKey: ["dashboard-init"] })
   }
 
-  useEffect(() => {
-    fetchData()
-  }, [])
+  const createMutation = useMutation({
+    mutationFn: (data: any) => incomeService.create(data, viewMode),
+    onSuccess: invalidateIncomes,
+  })
+
+  const deleteMutation = useMutation({
+    mutationFn: (id: string) => incomeService.delete(id),
+    onSuccess: invalidateIncomes,
+  })
+
+  const bulkDeleteMutation = useMutation({
+    mutationFn: (ids: string[]) => incomeService.deleteMany(ids),
+    onSuccess: invalidateIncomes,
+  })
 
   const handleAddIncome = async (incomeData: any) => {
-    await incomeService.create(incomeData)
-    await fetchData()
+    await createMutation.mutateAsync(incomeData)
   }
 
   const handleDeleteIncome = async (id: string) => {
-    await incomeService.delete(id)
-    await fetchData()
+    await deleteMutation.mutateAsync(id)
+  }
+
+  const handleDeleteMultipleIncomes = async (ids: string[]) => {
+    if (!ids.length) return
+    await bulkDeleteMutation.mutateAsync(ids)
   }
 
   return (
@@ -56,6 +68,7 @@ export default function RendaPage() {
         incomes={incomes}
         loading={loading}
         onDelete={handleDeleteIncome}
+        onDeleteMultiple={handleDeleteMultipleIncomes}
       />
     </div>
   )

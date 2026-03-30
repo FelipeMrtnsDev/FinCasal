@@ -20,6 +20,13 @@ type BudgetListCardProps = {
 }
 
 export function BudgetListCard({ selectedMonth, categories, budgetStatus, removeBudget, deletingId }: BudgetListCardProps) {
+  const [yearRaw, monthRaw] = selectedMonth.split("-")
+  const year = Number(yearRaw)
+  const monthIndex = Number(monthRaw) - 1
+  const selectedMonthDate = Number.isInteger(year) && Number.isInteger(monthIndex)
+    ? new Date(year, monthIndex, 1)
+    : new Date()
+
   if (budgetStatus.length === 0) {
     return (
       <Card>
@@ -36,7 +43,7 @@ export function BudgetListCard({ selectedMonth, categories, budgetStatus, remove
     <Card>
       <CardHeader>
         <CardTitle className="text-base">Orcamentos por Categoria</CardTitle>
-        <CardDescription>{format(new Date(`${selectedMonth}-01`), "MMMM 'de' yyyy", { locale: ptBR })}</CardDescription>
+        <CardDescription>{format(selectedMonthDate, "MMMM 'de' yyyy", { locale: ptBR })}</CardDescription>
       </CardHeader>
       <CardContent>
         <div className="flex flex-col gap-5">

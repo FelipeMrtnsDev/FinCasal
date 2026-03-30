@@ -1,10 +1,12 @@
 "use client"
 
-import { useEffect, useMemo, useState } from "react"
+import { useMemo, useState } from "react"
+import { useQuery, useQueryClient } from "@tanstack/react-query"
 import { Plus, ArrowDownRight, TrendingUp, TrendingDown, BarChart3 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { TabsContent } from "@/components/ui/tabs"
 import type { Investment } from "@/lib/types"
+import { useFinance } from "@/lib/finance-context"
 import { investmentService } from "@/services/financeService"
 import { InvestmentFormDialog } from "./InvestmentFormDialog"
 import { InvestmentStatsCards } from "./InvestmentStatsCards"
@@ -21,34 +23,33 @@ type InvestmentsTabContentProps = {
 }
 
 export function InvestmentsTabContent({ personNames }: InvestmentsTabContentProps) {
-  const [investments, setInvestments] = useState<Investment[]>([])
-  const [summary, setSummary] = useState<InvestmentsSummaryResponse | null>(null)
-  const [loading, setLoading] = useState(true)
+  const { viewMode } = useFinance()
+  const queryClient = useQueryClient()
   const [dialogOpen, setDialogOpen] = useState(false)
   const [selectedInvestment, setSelectedInvestment] = useState<Investment | null>(null)
   const [selectedAsset, setSelectedAsset] = useState<AssetSummary | null>(null)
 
-  const fetchData = async () => {
-    setLoading(true)
-    try {
+  const { data: queryData, isLoading: loading } = useQuery({
+    queryKey: ["investments", viewMode],
+    queryFn: async () => {
       const [investmentsResponse, summaryResponse] = await Promise.all([
-        investmentService.getAll(),
-        investmentService.getSummary(),
+        investmentService.getAll({ view: viewMode }),
+        investmentService.getSummary(viewMode),
       ])
-      setInvestments((investmentsResponse || []).map(normalizeInvestment))
-      setSummary(summaryResponse || null)
-    } catch (error) {
-      console.error("Erro ao buscar investimentos:", error)
-      setInvestments([])
-      setSummary(null)
-    } finally {
-      setLoading(false)
-    }
-  }
+      return {
+        investments: (investmentsResponse || []).map(normalizeInvestment),
+        summary: (summaryResponse || null) as InvestmentsSummaryResponse | null,
+      }
+    },
+  })
 
-  useEffect(() => {
-    fetchData()
-  }, [])
+  const investments = queryData?.investments ?? []
+  const summary = queryData?.summary ?? null
+
+  const invalidateInvestments = () => {
+    queryClient.invalidateQueries({ queryKey: ["investments"] })
+    queryClient.invalidateQueries({ queryKey: ["dashboard-init"] })
+  }
 
   const handleAddInvestment = async (payload: Omit<Investment, "id">) => {
     const asset = payload.asset.trim()
@@ -59,14 +60,20 @@ export function InvestmentsTabContent({ personNames }: InvestmentsTabContentProp
       type: BACKEND_TYPE_MAP[payload.type],
       ...(asset ? { asset } : {}),
     }
-    await investmentService.create(requestBody)
-    await fetchData()
+    await investmentService.create(requestBody, viewMode)
+    invalidateInvestments()
   }
 
   const handleDeleteInvestment = async (id: string) => {
     await investmentService.delete(id)
     setSelectedInvestment(null)
-    await fetchData()
+    invalidateInvestments()
+  }
+
+  const handleDeleteMultipleInvestments = async (ids: string[]) => {
+    if (!ids.length) return
+    await investmentService.deleteMany(ids)
+    invalidateInvestments()
   }
 
   const computedByAsset = useMemo(() => getByAssetFromInvestments(investments), [investments])
@@ -113,7 +120,7 @@ export function InvestmentsTabContent({ personNames }: InvestmentsTabContentProp
 
       {!loading && <InvestmentCharts byType={byType} byAsset={byAsset} />}
 
-      {!loading && <InvestmentOperationsList investments={investments} onSelect={setSelectedInvestment} />}
+      {!loading && <InvestmentOperationsList investments={investments} onSelect={setSelectedInvestment} onDeleteMultiple={handleDeleteMultipleInvestments} />}
 
       {!loading && <InvestmentAssetDialog selectedAsset={selectedAsset} onClose={() => setSelectedAsset(null)} />}
 

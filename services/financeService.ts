@@ -1,11 +1,14 @@
 import api from "@/lib/api";
-import { AxiosError } from "axios";
+import { AxiosError, AxiosProgressEvent } from "axios";
 import {
   Expense,
   Income,
   Investment,
   Category,
+  CategoryType,
+  DataScope,
   SavingsGoal,
+  ViewMode,
 } from "@/lib/types";
 
 export interface BudgetDTO {
@@ -76,6 +79,20 @@ export interface CreateSalePayload {
   quantity: number;
   date: string;
   personId?: string;
+  scope?: DataScope;
+}
+
+export interface ExpenseCsvImportPayload {
+  file: File;
+  dashboardId: string;
+  scope?: DataScope;
+  onUploadProgress?: (progress: number) => void;
+}
+
+export interface ExpenseCsvImportResult {
+  importedCount: number;
+  processedRows: number;
+  chunks: number;
 }
 
 export interface SalesSummaryDTO {
@@ -98,6 +115,63 @@ export interface SalesByProductDTO {
   profitPerUnit: number;
 }
 
+export interface PaginatedExpensesResponse {
+  items: Expense[];
+  page: number;
+  pageSize: number;
+  totalItems: number;
+  totalPages: number;
+}
+
+export type BillingPlanId = "INDIVIDUAL" | "COUPLE";
+export type BillingCheckoutMethod = "PIX" | "CARD";
+
+export interface BillingPlan {
+  id: BillingPlanId;
+  name: string;
+  description: string;
+  price: number;
+  currency: string;
+  interval: string;
+}
+
+export interface BillingCheckoutCustomer {
+  name?: string;
+  cellphone?: string;
+  email?: string;
+  taxId?: string;
+}
+
+export interface BillingCheckoutPayload {
+  dashboardId: string;
+  planId: BillingPlanId;
+  returnUrl: string;
+  completionUrl: string;
+  methods?: BillingCheckoutMethod[];
+  customerId?: string;
+  customer?: BillingCheckoutCustomer;
+}
+
+export interface BillingCheckoutResponse {
+  id?: string;
+  url: string;
+  status?: string;
+  [key: string]: unknown;
+}
+
+export interface BillingConfirmPaymentResponse {
+  success?: boolean;
+  status?: string;
+  [key: string]: unknown;
+}
+
+export interface BillingSubscription {
+  id?: string;
+  status?: string;
+  planId?: BillingPlanId | string;
+  [key: string]: unknown;
+}
+
 const isBadRequest = (error: unknown): boolean =>
   error instanceof AxiosError
     ? error.response?.status === 400
@@ -105,6 +179,13 @@ const isBadRequest = (error: unknown): boolean =>
       error !== null &&
       "response" in error &&
       (error as { response?: { status?: number } }).response?.status === 400;
+
+const toNumber = (value: unknown): number =>
+  typeof value === "number"
+    ? value
+    : typeof value === "string"
+      ? Number(value) || 0
+      : 0;
 
 const getErrorMessage = (error: unknown): string => {
   if (error instanceof AxiosError) {
@@ -123,6 +204,100 @@ const getErrorMessage = (error: unknown): string => {
 const isDashboardRequiredError = (error: unknown): boolean => {
   if (!isBadRequest(error)) return false;
   return getErrorMessage(error).toLowerCase().includes("dashboard");
+};
+
+const normalizeCategoryType = (value: unknown): CategoryType | undefined => {
+  const normalized = String(value || "").toLowerCase();
+  if (normalized.includes("sale") || normalized.includes("venda"))
+    return "SALE";
+  if (normalized.includes("expense") || normalized.includes("desp"))
+    return "EXPENSE";
+  return undefined;
+};
+
+const toDataScope = (view?: DataScope | ViewMode): DataScope => {
+  if (view === "COUPLE" || view === "casal") return "COUPLE";
+  return "INDIVIDUAL";
+};
+
+const toBackendCategoryType = (type: CategoryType): "EXPENSE" | "SALE" =>
+  type === "SALE" ? "SALE" : "EXPENSE";
+
+const normalizeCategory = (
+  value: unknown,
+  fallbackType?: CategoryType,
+): Category | null => {
+  if (!value || typeof value !== "object") return null;
+  const record = value as Record<string, unknown>;
+  const id = record.id;
+  const name = record.name;
+  if (typeof id !== "string" || typeof name !== "string") return null;
+  return {
+    id,
+    name,
+    color:
+      typeof record.color === "string" && record.color
+        ? record.color
+        : "#21C25E",
+    type: normalizeCategoryType(record.type) || fallbackType,
+  };
+};
+
+const normalizeCategoryList = (
+  data: unknown,
+  fallbackType?: CategoryType,
+): Category[] => {
+  if (!Array.isArray(data)) return [];
+  return data
+    .map((item) => normalizeCategory(item, fallbackType))
+    .filter((item): item is Category => item !== null);
+};
+
+const normalizePaginatedExpenses = (
+  data: unknown,
+  fallbackPage: number,
+): PaginatedExpensesResponse => {
+  if (Array.isArray(data)) {
+    return {
+      items: data as Expense[],
+      page: fallbackPage,
+      pageSize: data.length,
+      totalItems: data.length,
+      totalPages: 1,
+    };
+  }
+
+  if (!data || typeof data !== "object") {
+    return {
+      items: [],
+      page: fallbackPage,
+      pageSize: 40,
+      totalItems: 0,
+      totalPages: 1,
+    };
+  }
+
+  const record = data as Record<string, unknown>;
+  const items = Array.isArray(record.items) ? (record.items as Expense[]) : [];
+  return {
+    items,
+    page:
+      typeof record.page === "number" && record.page > 0
+        ? record.page
+        : fallbackPage,
+    pageSize:
+      typeof record.pageSize === "number" && record.pageSize > 0
+        ? record.pageSize
+        : 40,
+    totalItems:
+      typeof record.totalItems === "number" && record.totalItems >= 0
+        ? record.totalItems
+        : items.length,
+    totalPages:
+      typeof record.totalPages === "number" && record.totalPages > 0
+        ? record.totalPages
+        : 1,
+  };
 };
 
 let dashboardCheckCache: { checkedAt: number; hasDashboard: boolean } | null =
@@ -148,48 +323,127 @@ const hasDashboardMembership = async (): Promise<boolean> => {
 };
 
 export const expenseService = {
-  getAll: async (params?: any): Promise<Expense[]> => {
-    if (!(await hasDashboardMembership())) return [];
-    const { limit, ...rest } = params || {};
+  getPage: async (params?: {
+    view?: DataScope | ViewMode;
+    page?: number;
+    [key: string]: any;
+  }): Promise<PaginatedExpensesResponse> => {
+    if (!(await hasDashboardMembership()))
+      return {
+        items: [],
+        page: 1,
+        pageSize: 40,
+        totalItems: 0,
+        totalPages: 1,
+      };
+    const { view, page = 1, ...rest } = params || {};
+    const scopedParams = { ...rest, page, view: toDataScope(view) };
     let response;
     try {
-      response = await api.get<Expense[]>("/expenses", { params: rest });
-    } catch (error) {
-      if (!isBadRequest(error)) throw error;
-      response = await api.get<Expense[]>("/expenses");
+      response = await api.get<unknown>("/expenses", {
+        params: scopedParams,
+      });
+    } catch {
+      try {
+        response = await api.get<unknown>("/expenses", {
+          params: { ...rest, page },
+        });
+      } catch (error) {
+        if (!isBadRequest(error)) throw error;
+        response = await api.get<unknown>("/expenses", { params: { page } });
+      }
     }
+    return normalizePaginatedExpenses(response.data, page);
+  },
 
-    if (limit && Array.isArray(response.data)) {
-      return response.data.slice(0, limit);
+  getAll: async (params?: {
+    view?: DataScope | ViewMode;
+    [key: string]: any;
+  }): Promise<Expense[]> => {
+    const { limit, view, ...rest } = params || {};
+    const pageData = await expenseService.getPage({
+      ...rest,
+      view,
+      page: typeof rest.page === "number" ? rest.page : 1,
+    });
+    if (limit && Array.isArray(pageData.items)) {
+      return pageData.items.slice(0, limit);
     }
-
+    return pageData.items;
+  },
+  create: async (data: any, view?: DataScope | ViewMode): Promise<Expense> => {
+    const payload = { ...data, scope: toDataScope(view) };
+    const response = await api.post<Expense>("/expenses", payload);
     return response.data;
   },
-  create: async (data: any): Promise<Expense> => {
-    const response = await api.post<Expense>("/expenses", data);
+  update: async (
+    id: string,
+    data: {
+      description?: string;
+      amount?: number;
+      date?: string;
+      categoryId?: string | null;
+      paymentMethod?: string;
+      type?: string;
+      scope?: DataScope;
+    },
+    view?: DataScope | ViewMode,
+  ): Promise<Expense> => {
+    const payload = { ...data, scope: data.scope || toDataScope(view) };
+    const response = await api.put<Expense>(`/expenses/${id}`, payload);
     return response.data;
   },
   delete: async (id: string): Promise<void> => {
     await api.delete(`/expenses/${id}`);
   },
-  importCsv: async (formData: FormData): Promise<any> => {
-    const response = await api.post("/expenses/import-csv", formData, {
-      headers: { "Content-Type": "multipart/form-data" },
-    });
+  deleteMany: async (ids: string[]): Promise<void> => {
+    await api.post("/expenses/bulk-delete", { ids });
+  },
+  importCsv: async ({
+    file,
+    dashboardId,
+    scope = "INDIVIDUAL",
+    onUploadProgress,
+  }: ExpenseCsvImportPayload): Promise<ExpenseCsvImportResult> => {
+    const formData = new FormData();
+    formData.append("file", file);
+    formData.append("dashboardId", dashboardId);
+    formData.append("scope", scope);
+
+    const response = await api.post<ExpenseCsvImportResult>(
+      "/expenses/import",
+      formData,
+      {
+        headers: { "Content-Type": "multipart/form-data" },
+        onUploadProgress: (event: AxiosProgressEvent) => {
+          if (!onUploadProgress || !event.total) return;
+          const progress = Math.round((event.loaded * 100) / event.total);
+          onUploadProgress(progress);
+        },
+      },
+    );
     return response.data;
   },
 };
 
 export const incomeService = {
-  getAll: async (params?: any): Promise<Income[]> => {
+  getAll: async (params?: {
+    view?: DataScope | ViewMode;
+    [key: string]: any;
+  }): Promise<Income[]> => {
     if (!(await hasDashboardMembership())) return [];
-    const { limit, ...rest } = params || {};
+    const { limit, view, ...rest } = params || {};
+    const scopedParams = { ...rest, view: toDataScope(view) };
     let response;
     try {
-      response = await api.get<Income[]>("/incomes", { params: rest });
-    } catch (error) {
-      if (!isBadRequest(error)) throw error;
-      response = await api.get<Income[]>("/incomes");
+      response = await api.get<Income[]>("/incomes", { params: scopedParams });
+    } catch {
+      try {
+        response = await api.get<Income[]>("/incomes", { params: rest });
+      } catch (error) {
+        if (!isBadRequest(error)) throw error;
+        response = await api.get<Income[]>("/incomes");
+      }
     }
 
     if (limit && Array.isArray(response.data)) {
@@ -197,48 +451,107 @@ export const incomeService = {
     }
     return response.data;
   },
-  create: async (data: any): Promise<Income> => {
-    const response = await api.post<Income>("/incomes", data);
+  create: async (data: any, view?: DataScope | ViewMode): Promise<Income> => {
+    const payload = { ...data, scope: toDataScope(view) };
+    const response = await api.post<Income>("/incomes", payload);
     return response.data;
   },
   delete: async (id: string): Promise<void> => {
-    // A rota base no app.ts é /api/incomes
-    // O axios chama /incomes/${id}
-    // Verificando se há barra extra no backend ou se o ID está vindo correto
     await api.delete(`/incomes/${id}`);
+  },
+  deleteMany: async (ids: string[]): Promise<void> => {
+    await api.post("/incomes/bulk-delete", { ids });
   },
 };
 
 export const investmentService = {
-  getAll: async (params?: any): Promise<Investment[]> => {
+  getAll: async (params?: {
+    view?: DataScope | ViewMode;
+    [key: string]: any;
+  }): Promise<Investment[]> => {
     if (!(await hasDashboardMembership())) return [];
-    const response = await api.get<Investment[]>("/investments", { params });
+    const { view, ...rest } = params || {};
+    let response;
+    try {
+      response = await api.get<Investment[]>("/investments", {
+        params: { ...rest, view: toDataScope(view) },
+      });
+    } catch {
+      response = await api.get<Investment[]>("/investments", { params: rest });
+    }
     return response.data;
   },
-  create: async (data: any): Promise<Investment> => {
-    const response = await api.post<Investment>("/investments", data);
+  create: async (
+    data: any,
+    view?: DataScope | ViewMode,
+  ): Promise<Investment> => {
+    const payload = { ...data, scope: toDataScope(view) };
+    const response = await api.post<Investment>("/investments", payload);
     return response.data;
   },
   delete: async (id: string): Promise<void> => {
     await api.delete(`/investments/${id}`);
   },
-  getSummary: async (): Promise<any> => {
+  deleteMany: async (ids: string[]): Promise<void> => {
+    await api.post("/investments/bulk-delete", { ids });
+  },
+  getSummary: async (view?: DataScope | ViewMode): Promise<any> => {
     if (!(await hasDashboardMembership()))
       return { totalInvested: 0, totalReturns: 0 };
-    const response = await api.get("/investments/summary");
+    let response;
+    try {
+      response = await api.get("/investments/summary", {
+        params: { view: toDataScope(view) },
+      });
+    } catch {
+      response = await api.get("/investments/summary");
+    }
     return response.data;
   },
 };
 
 export const categoryService = {
-  getAll: async (): Promise<Category[]> => {
+  getAll: async (type: CategoryType = "EXPENSE"): Promise<Category[]> => {
     if (!(await hasDashboardMembership())) return [];
-    const response = await api.get<Category[]>("/categories");
-    return response.data;
+    const params = { type: toBackendCategoryType(type) };
+    try {
+      const response = await api.get<unknown>("/categories", { params });
+      return normalizeCategoryList(response.data, type);
+    } catch (error) {
+      try {
+        const response = await api.get<unknown>("/categories", {
+          params: { type },
+        });
+        return normalizeCategoryList(response.data, type);
+      } catch {
+        try {
+          const response = await api.get<unknown>(`/categories/${type}`);
+          return normalizeCategoryList(response.data, type);
+        } catch {
+          if (!isBadRequest(error)) throw error;
+          const response = await api.get<unknown>("/categories");
+          const normalized = normalizeCategoryList(response.data);
+          return normalized.filter((category) =>
+            category.type ? category.type === type : true,
+          );
+        }
+      }
+    }
   },
   create: async (data: Omit<Category, "id">): Promise<Category> => {
-    const response = await api.post<Category>("/categories", data);
-    return response.data;
+    const payload = {
+      ...data,
+      type: data.type ? toBackendCategoryType(data.type) : undefined,
+    };
+    const response = await api.post<unknown>("/categories", payload);
+    return (
+      normalizeCategory(response.data, data.type || "EXPENSE") || {
+        id: "",
+        name: data.name,
+        color: data.color,
+        type: data.type || "EXPENSE",
+      }
+    );
   },
   delete: async (id: string): Promise<void> => {
     await api.delete(`/categories/${id}`);
@@ -247,8 +560,19 @@ export const categoryService = {
     id: string,
     data: Partial<Omit<Category, "id">>,
   ): Promise<Category> => {
-    const response = await api.patch<Category>(`/categories/${id}`, data);
-    return response.data;
+    const payload = {
+      ...data,
+      type: data.type ? toBackendCategoryType(data.type) : undefined,
+    };
+    const response = await api.patch<unknown>(`/categories/${id}`, payload);
+    return (
+      normalizeCategory(response.data, data.type) || {
+        id,
+        name: data.name || "",
+        color: data.color || "#21C25E",
+        type: data.type,
+      }
+    );
   },
 };
 
@@ -280,12 +604,131 @@ export const dashboardService = {
     const response = await api.post("/dashboard/join", { inviteCode });
     return response.data;
   },
+  invite: async (email: string): Promise<any> => {
+    const response = await api.post("/dashboard/invite", { email });
+    return response.data;
+  },
   get: async (): Promise<any> => {
     const response = await api.get("/dashboard");
     return response.data;
   },
   update: async (data: any): Promise<any> => {
     const response = await api.patch("/dashboard", data);
+    return response.data;
+  },
+};
+
+export const billingService = {
+  getPlans: async (
+    dashboardId: string,
+    authToken?: string,
+  ): Promise<BillingPlan[]> => {
+    const response = await api.get<unknown>("/billing/plans", {
+      params: { dashboardId },
+      headers: authToken
+        ? {
+            Authorization: `Bearer ${authToken}`,
+          }
+        : undefined,
+    });
+    const data = response.data;
+    if (!Array.isArray(data)) return [];
+    return data
+      .map((item) => {
+        if (!item || typeof item !== "object") return null;
+        const record = item as Record<string, unknown>;
+        const id =
+          record.id === "INDIVIDUAL" || record.id === "COUPLE"
+            ? record.id
+            : null;
+        if (!id) return null;
+        return {
+          id,
+          name: typeof record.name === "string" ? record.name : id,
+          description:
+            typeof record.description === "string" ? record.description : "",
+          price: toNumber(record.price),
+          currency:
+            typeof record.currency === "string" ? record.currency : "BRL",
+          interval:
+            typeof record.interval === "string" ? record.interval : "month",
+        } as BillingPlan;
+      })
+      .filter((item): item is BillingPlan => item !== null);
+  },
+
+  createPlanCheckout: async (
+    payload: BillingCheckoutPayload,
+    authToken?: string,
+  ): Promise<BillingCheckoutResponse> => {
+    const response = await api.post<unknown>(
+      "/billing/checkout/plan",
+      payload,
+      {
+        headers: authToken
+          ? {
+              Authorization: `Bearer ${authToken}`,
+            }
+          : undefined,
+      },
+    );
+    const data = response.data;
+    if (!data || typeof data !== "object") {
+      throw new Error("Resposta inválida do checkout.");
+    }
+    const record = data as Record<string, unknown>;
+    const url =
+      (typeof record.url === "string" && record.url) ||
+      (record.data &&
+      typeof record.data === "object" &&
+      typeof (record.data as Record<string, unknown>).url === "string"
+        ? ((record.data as Record<string, unknown>).url as string)
+        : "");
+    if (!url) {
+      throw new Error("Checkout sem URL de redirecionamento.");
+    }
+    return {
+      ...record,
+      url,
+      id: typeof record.id === "string" ? record.id : undefined,
+      status: typeof record.status === "string" ? record.status : undefined,
+    };
+  },
+
+  confirmCheckoutPayment: async (
+    checkoutId: string,
+    payload: { dashboardId: string },
+    authToken?: string,
+  ): Promise<BillingConfirmPaymentResponse> => {
+    const response = await api.post<BillingConfirmPaymentResponse>(
+      `/billing/checkout/${checkoutId}/confirm-payment`,
+      payload,
+      {
+        headers: authToken
+          ? {
+              Authorization: `Bearer ${authToken}`,
+            }
+          : undefined,
+      },
+    );
+    return response.data || {};
+  },
+
+  getSubscription: async (
+    dashboardId: string,
+    authToken?: string,
+  ): Promise<BillingSubscription | null> => {
+    const response = await api.get<BillingSubscription | null>(
+      "/billing/subscription",
+      {
+        params: { dashboardId },
+        headers: authToken
+          ? {
+              Authorization: `Bearer ${authToken}`,
+            }
+          : undefined,
+      },
+    );
     return response.data;
   },
 };
@@ -347,39 +790,85 @@ export const salesService = {
     month?: string;
     productId?: string;
     category?: string;
+    view?: DataScope | ViewMode;
   }): Promise<SaleDTO[]> => {
     if (!(await hasDashboardMembership())) return [];
-    const response = await api.get<SaleDTO[]>("/sales", { params });
+    const { view, ...rest } = params || {};
+    let response;
+    try {
+      response = await api.get<SaleDTO[]>("/sales", {
+        params: { ...rest, view: toDataScope(view) },
+      });
+    } catch {
+      response = await api.get<SaleDTO[]>("/sales", { params: rest });
+    }
     return response.data;
   },
-  create: async (data: CreateSalePayload): Promise<SaleDTO> => {
-    const response = await api.post<SaleDTO>("/sales", data);
+  create: async (
+    data: CreateSalePayload,
+    view?: DataScope | ViewMode,
+  ): Promise<SaleDTO> => {
+    const payload = { ...data, scope: data.scope || toDataScope(view) };
+    const response = await api.post<SaleDTO>("/sales", payload);
     return response.data;
   },
   delete: async (id: string): Promise<void> => {
     await api.delete(`/sales/${id}`);
   },
-  getSummary: async (month?: string): Promise<SalesSummaryDTO> => {
+  deleteMany: async (ids: string[]): Promise<void> => {
+    await api.post("/sales/bulk-delete", { ids });
+  },
+  getSummary: async (
+    month?: string,
+    view?: DataScope | ViewMode,
+  ): Promise<SalesSummaryDTO> => {
     if (!(await hasDashboardMembership())) {
       return { totalRevenue: 0, totalCost: 0, totalProfit: 0, totalUnits: 0 };
     }
-    const response = await api.get<SalesSummaryDTO>("/sales/summary", {
-      params: month ? { month } : undefined,
-    });
+    let response;
+    try {
+      response = await api.get<SalesSummaryDTO>("/sales/summary", {
+        params: { ...(month ? { month } : {}), view: toDataScope(view) },
+      });
+    } catch {
+      response = await api.get<SalesSummaryDTO>("/sales/summary", {
+        params: month ? { month } : undefined,
+      });
+    }
     return response.data;
   },
-  getByCategory: async (month?: string): Promise<SalesByCategoryDTO[]> => {
+  getByCategory: async (
+    month?: string,
+    view?: DataScope | ViewMode,
+  ): Promise<SalesByCategoryDTO[]> => {
     if (!(await hasDashboardMembership())) return [];
-    const response = await api.get<SalesByCategoryDTO[]>("/sales/by-category", {
-      params: month ? { month } : undefined,
-    });
+    let response;
+    try {
+      response = await api.get<SalesByCategoryDTO[]>("/sales/by-category", {
+        params: { ...(month ? { month } : {}), view: toDataScope(view) },
+      });
+    } catch {
+      response = await api.get<SalesByCategoryDTO[]>("/sales/by-category", {
+        params: month ? { month } : undefined,
+      });
+    }
     return response.data;
   },
-  getByProduct: async (month?: string): Promise<SalesByProductDTO[]> => {
+  getByProduct: async (
+    month?: string,
+    view?: DataScope | ViewMode,
+  ): Promise<SalesByProductDTO[]> => {
     if (!(await hasDashboardMembership())) return [];
-    const response = await api.get<SalesByProductDTO[]>("/sales/by-product", {
-      params: month ? { month } : undefined,
-    });
+    let response;
+    try {
+      response = await api.get<SalesByProductDTO[]>("/sales/by-product", {
+        params: { ...(month ? { month } : {}), view: toDataScope(view) },
+      });
+    } catch {
+      response = await api.get<SalesByProductDTO[]>("/sales/by-product", {
+        params: month ? { month } : undefined,
+      });
+    }
     return response.data;
   },
 };
