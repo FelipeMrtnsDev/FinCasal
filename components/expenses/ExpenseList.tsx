@@ -10,6 +10,7 @@ import { format, parseISO } from "date-fns"
 import { Skeleton } from "@/components/ui/skeleton"
 import { ExpenseDetailsDialog } from "./ExpenseDetailsDialog"
 import { ExpenseEditDialog } from "./ExpenseEditDialog"
+import { getCompanyByDescription } from "@/lib/companyRegistry"
 
 interface ExpenseListProps {
   expenses: Expense[]
@@ -255,6 +256,7 @@ export function ExpenseList({ expenses, categories, loading = false, onDelete, o
                 const paymentMethodKey = expense.paymentMethod as string;
                 const PayIcon = paymentIcons[paymentMethodKey] || paymentIcons[paymentMethodKey.toLowerCase()] || HelpCircle;
                 const paymentLabel = paymentLabels[paymentMethodKey] || paymentLabels[paymentMethodKey.toLowerCase()] || paymentMethodKey;
+                const matchedCompany = getCompanyByDescription(expense.description);
 
                 return (
                   <div
@@ -271,12 +273,18 @@ export function ExpenseList({ expenses, categories, loading = false, onDelete, o
                         )}
                       </div>
                     )}
-                    <div
-                      className="w-9 h-9 rounded-full flex items-center justify-center shrink-0"
-                      style={{ backgroundColor: catColor ? `${catColor}20` : undefined }}
-                    >
-                      <PayIcon className="w-4 h-4" style={{ color: catColor }} />
-                    </div>
+                    {matchedCompany ? (
+                      <div className="w-9 h-9 rounded-full shrink-0 flex items-center justify-center overflow-hidden bg-white border border-border shadow-sm">
+                        <img src={matchedCompany.logo} alt={matchedCompany.name} className="w-full h-full object-cover" />
+                      </div>
+                    ) : (
+                      <div
+                        className="w-9 h-9 rounded-full flex items-center justify-center shrink-0"
+                        style={{ backgroundColor: catColor ? `${catColor}20` : undefined }}
+                      >
+                        <PayIcon className="w-4 h-4" style={{ color: catColor }} />
+                      </div>
+                    )}
                     <div className="flex flex-col min-w-0 flex-1">
                       <span className="text-sm font-medium text-foreground truncate">{expense.description}</span>
                       <div className="flex items-center gap-2 text-xs text-muted-foreground">

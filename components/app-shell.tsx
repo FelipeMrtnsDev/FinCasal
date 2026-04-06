@@ -1,6 +1,6 @@
 "use client"
 
-import React, { useEffect, useState } from "react"
+import React, { useEffect, useState, useRef } from "react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import {
@@ -14,7 +14,9 @@ import {
   ChevronRight,
   Lock,
   LogOut,
+  Info,
 } from "lucide-react"
+import { AnimatePresence, motion } from "framer-motion"
 import { cn } from "@/lib/utils"
 import { useFinance } from "@/lib/finance-context"
 import { Button } from "@/components/ui/button"
@@ -43,6 +45,21 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const { viewMode, setViewMode, personNames, setViewModeReady } = useFinance()
   const [canUseCoupleMode, setCanUseCoupleMode] = useState(false)
   const [isLoggedOut, setIsLoggedOut] = useState(false)
+  const [showWarningModal, setShowWarningModal] = useState(false)
+  const timeoutRef = useRef<NodeJS.Timeout | null>(null)
+
+  const handleViewModeToggle = (mode: "individual" | "casal") => {
+    if (viewMode !== mode) {
+      setViewMode(mode)
+      setShowWarningModal(true)
+      if (timeoutRef.current) {
+        clearTimeout(timeoutRef.current)
+      }
+      timeoutRef.current = setTimeout(() => {
+        setShowWarningModal(false)
+      }, 4000)
+    }
+  }
 
   useEffect(() => {
     // Basic check for token existence on mount
@@ -167,7 +184,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           <div className="px-3 pb-3">
             <div className="flex rounded-lg bg-sidebar-accent p-1">
               <button
-                onClick={() => canUseCoupleMode && setViewMode("casal")}
+                onClick={() => canUseCoupleMode && handleViewModeToggle("casal")}
                 disabled={!canUseCoupleMode}
                 className={cn(
                   "flex-1 text-xs py-1.5 px-2 rounded-md transition-all font-medium inline-flex items-center justify-center gap-1",
@@ -181,7 +198,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                 Casal
               </button>
               <button
-                onClick={() => setViewMode("individual")}
+                onClick={() => handleViewModeToggle("individual")}
                 className={cn(
                   "flex-1 text-xs py-1.5 px-2 rounded-md transition-all font-medium",
                   viewMode === "individual"
@@ -264,7 +281,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           <div className="flex items-center gap-2">
             <div className="flex rounded-lg bg-secondary p-0.5">
               <button
-                onClick={() => canUseCoupleMode && setViewMode("casal")}
+                onClick={() => canUseCoupleMode && handleViewModeToggle("casal")}
                 disabled={!canUseCoupleMode}
                 className={cn(
                   "text-xs py-1 px-2.5 rounded-md transition-all font-medium inline-flex items-center gap-1",
@@ -278,7 +295,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                 Casal
               </button>
               <button
-                onClick={() => setViewMode("individual")}
+                onClick={() => handleViewModeToggle("individual")}
                 className={cn(
                   "text-xs py-1 px-2.5 rounded-md transition-all font-medium",
                   viewMode === "individual"
@@ -343,6 +360,47 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           </div>
         </nav>
       </div>
+
+      {/* Warning Modal */}
+      <AnimatePresence>
+        {showWarningModal && (
+          <motion.div
+            initial={{ opacity: 0, backdropFilter: "blur(0px)" }}
+            animate={{ opacity: 1, backdropFilter: "blur(4px)" }}
+            exit={{ opacity: 0, backdropFilter: "blur(0px)" }}
+            className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-background/60"
+            onClick={() => setShowWarningModal(false)}
+          >
+            <motion.div
+              initial={{ opacity: 0, scale: 0.8, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.8, y: 20 }}
+              transition={{ type: "spring", stiffness: 350, damping: 25 }}
+              className="bg-card border border-border shadow-2xl rounded-2xl p-6 max-w-sm w-full text-center flex flex-col items-center gap-4 relative overflow-hidden"
+              onClick={(e) => e.stopPropagation()}
+            >
+              {/* Decorative background glow */}
+              <div className="absolute top-0 left-1/2 -translate-x-1/2 w-32 h-32 bg-primary/20 rounded-full blur-3xl -z-10" />
+
+              <div className="w-14 h-14 rounded-full bg-primary/10 flex items-center justify-center border border-primary/20 shadow-inner">
+                <Info className="w-7 h-7 text-primary" />
+              </div>
+
+              <div>
+                <h3 className="text-xl font-bold mb-2 tracking-tight">Modo Alterado</h3>
+                <p className="text-muted-foreground text-sm leading-relaxed">
+                  Você mudou para o modo <strong className="text-foreground">{viewMode === "casal" ? "Casal" : "Individual"}</strong>.<br />
+                  Lembre-se que apenas os dados exibidos na tela são alterados.
+                </p>
+              </div>
+
+              <Button size="lg" className="w-full mt-2 font-medium rounded-xl" onClick={() => setShowWarningModal(false)}>
+                Entendido
+              </Button>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   )
 }

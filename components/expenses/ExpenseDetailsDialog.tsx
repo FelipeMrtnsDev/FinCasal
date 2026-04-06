@@ -12,6 +12,7 @@ import { ptBR } from "date-fns/locale"
 import { Expense, Category } from "@/lib/types"
 import { CreditCard, Smartphone, Banknote, ArrowLeftRight, HelpCircle, Calendar, User, Tag, FileText, Pencil, Trash2, Loader2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
+import { getCompanyByDescription } from "@/lib/companyRegistry"
 
 interface ExpenseDetailsDialogProps {
   expense: Expense | null
@@ -104,6 +105,8 @@ export function ExpenseDetailsDialog({
     return types[type] || types[type.toUpperCase()] || type;
   };
 
+  const matchedCompany = getCompanyByDescription(expense.description);
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-md">
@@ -122,7 +125,13 @@ export function ExpenseDetailsDialog({
           <div className="grid gap-4">
             {/* Descrição */}
             <div className="flex items-start gap-3 p-3 rounded-md hover:bg-muted/30 transition-colors">
-              <FileText className="w-5 h-5 text-muted-foreground mt-0.5" />
+              {matchedCompany ? (
+                <div className="w-10 h-10 -ml-1 rounded-full shrink-0 flex items-center justify-center overflow-hidden bg-white border border-border shadow-sm">
+                  <img src={matchedCompany.logo} alt={matchedCompany.name} className="w-full h-full object-cover" />
+                </div>
+              ) : (
+                <FileText className="w-5 h-5 text-muted-foreground mt-0.5" />
+              )}
               <div className="flex flex-col">
                 <span className="text-xs text-muted-foreground font-medium uppercase">Descrição</span>
                 <span className="text-base font-medium text-foreground">{expense.description}</span>
